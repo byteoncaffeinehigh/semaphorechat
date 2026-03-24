@@ -1,0 +1,138 @@
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.page {
+  min-height: 100vh;
+  background-color: #070d07;
+  display: flex;
+  justify-content: center;
+  padding: 40px 20px 80px;
+  font-family: 'Share Tech Mono', 'Courier New', monospace;
+}
+
+.terminal {
+  width: 100%;
+  max-width: 860px;
+  animation: fadeIn 0.4s ease;
+}
+
+.titleBar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 10px 0 20px;
+  border-bottom: 1px solid #1a3a1a;
+  margin-bottom: 24px;
+}
+
+.backBtn {
+  background: none;
+  border: 1px solid #1a4a1a;
+  color: #1a9a1a;
+  font-family: inherit;
+  font-size: 13px;
+  padding: 4px 12px;
+  cursor: pointer;
+  border-radius: 2px;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.backBtn:hover {
+  color: #00ff41;
+  border-color: #00ff41;
+}
+
+.titleText {
+  flex: 1;
+  margin: 0;
+  font-size: 16px;
+  color: #00ff41;
+  text-shadow: 0 0 12px rgba(0, 255, 65, 0.5);
+  letter-spacing: 2px;
+}
+
+.version {
+  font-size: 12px;
+  color: #1a5a1a;
+}
+
+.intro {
+  margin-bottom: 32px;
+}
+
+.line {
+  color: #1a7a1a;
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.dim {
+  color: #1a5a1a;
+}
+
+.section {
+  margin-bottom: 36px;
+}
+
+.sectionTitle {
+  font-size: 12px;
+  color: #1a5a1a;
+  letter-spacing: 1px;
+  margin-bottom: 6px;
+}
+
+.sectionDesc {
+  font-size: 13px;
+  color: #1a6a1a;
+  margin-bottom: 12px;
+  padding-left: 4px;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.keyCell {
+  width: 220px;
+  padding: 4px 16px 4px 4px;
+  vertical-align: top;
+  white-space: nowrap;
+}
+
+.key {
+  display: inline-block;
+  background: #0a1f0a;
+  border: 1px solid #1a4a1a;
+  color: #00ff41;
+  font-size: 12px;
+  padding: 1px 7px;
+  border-radius: 3px;
+  margin-right: 4px;
+  text-shadow: 0 0 6px rgba(0, 255, 65, 0.4);
+}
+
+.descCell {
+  font-size: 13px;
+  color: #2a8a2a;
+  padding: 4px 0;
+  line-height: 1.5;
+}
+
+.footer {
+  border-top: 1px solid #1a3a1a;
+  padding-top: 16px;
+}
+
+.cursor {
+  color: #00ff41;
+  font-size: 16px;
+  animation: blink 1s step-end infinite;
+}

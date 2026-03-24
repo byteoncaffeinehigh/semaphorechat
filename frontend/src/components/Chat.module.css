@@ -1,0 +1,59 @@
+.container {
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  padding: 15px;
+  word-break: break-word;
+  color: #00ff41;
+  border-bottom: 1px solid #0f2a0f;
+}
+
+.container:hover {
+  background-color: #0a1f0a;
+}
+
+.avatarWrapper {
+  position: relative;
+  margin: 5px;
+  margin-right: 10px;
+  flex-shrink: 0;
+}
+
+.chatInfo {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: space-between;
+  min-width: 0;
+}
+
+.chatInfo > p {
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.unreadBadge {
+  background-color: #00ff41;
+  color: #070d07;
+  border-radius: 10px;
+  font-size: 0.7em;
+  font-weight: 700;
+  padding: 2px 7px;
+  min-width: 20px;
+  text-align: center;
+  flex-shrink: 0;
+  margin-left: 8px;
+}
+
+.onlineDot {
+  position: absolute;
+  bottom: 1px;
+  right: 1px;
+  width: 10px;
+  height: 10px;
+  background-color: #00ff41;
+  border-radius: 50%;
+  border: 2px solid #0d150d;
+}

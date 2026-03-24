@@ -1,0 +1,109 @@
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.92);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal {
+  width: 100%;
+  max-width: 900px;
+  height: 100%;
+  max-height: 600px;
+  background: #070d07;
+  border: 1px solid #1a3a1a;
+  display: flex;
+  flex-direction: column;
+  font-family: 'Share Tech Mono', 'Courier New', monospace;
+}
+
+@media (max-width: 600px) {
+  .modal {
+    max-height: 100%;
+    border: none;
+  }
+}
+
+.statusBar {
+  padding: 8px 16px;
+  font-size: 13px;
+  background: #0d150d;
+  border-bottom: 1px solid #1a3a1a;
+  letter-spacing: 0.05em;
+}
+
+.statusBarActive {
+  color: #00ff41;
+}
+
+.statusBarInactive {
+  color: #1a7a1a;
+}
+
+.videoArea {
+  flex: 1;
+  position: relative;
+  background: #000;
+  overflow: hidden;
+}
+
+.remoteVideo {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.localVideo {
+  position: absolute;
+  bottom: 12px;
+  right: 12px;
+  width: 140px;
+  height: 90px;
+  object-fit: cover;
+  border: 1px solid #1a3a1a;
+  background: #0d150d;
+}
+
+@media (max-width: 600px) {
+  .localVideo {
+    width: 100px;
+    height: 65px;
+  }
+}
+
+.waitingText {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #1a4a1a;
+  font-family: 'Share Tech Mono', 'Courier New', monospace;
+  font-size: 14px;
+  letter-spacing: 0.1em;
+}
+
+.controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 14px;
+  background: #0d150d;
+  border-top: 1px solid #1a3a1a;
+}
+
+.endButton {
+  background: #3a0a0a !important;
+  color: #ff4141 !important;
+  border: 1px solid #5a1a1a !important;
+  border-radius: 50% !important;
+  padding: 10px !important;
+}
+
+.endButton:hover {
+  background: #5a1010 !important;
+}

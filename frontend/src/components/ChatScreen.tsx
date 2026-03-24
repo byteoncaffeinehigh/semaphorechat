@@ -1,4 +1,4 @@
-import styled from "styled-components";
+import styles from "./ChatScreen.module.css";
 import { useAuth } from "../utils/AuthContext";
 import { useWS, useWSListener } from "../utils/WSContext";
 import { apiGet, apiPost, apiPut } from "../utils/api";
@@ -12,34 +12,35 @@ import MicIcon from "@mui/icons-material/Mic";
 import StopIcon from "@mui/icons-material/Stop";
 import CloseIcon from "@mui/icons-material/Close";
 import AddPhotoAlternateIcon from "@mui/icons-material/AddPhotoAlternate";
-import Message from "../components/Message";
+import Message, { type MessageData } from "../components/Message";
 import Loading from "../components/Loading";
 import ConnectionStats from "../components/ConnectionStats";
 import { useState, useRef, useEffect, useCallback } from "react";
 import getRecipientEmail from "../utils/getRecipientEmail";
 import TimeAgo from "timeago-react";
 import { playKeyClick, playNotificationBeep } from "../utils/sounds";
+import { type Chat } from "../utils/ChatsContext";
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
-const rot13 = (str) =>
+const rot13 = (str: string): string =>
   str.replace(/[a-zA-Z]/g, (c) => {
     const base = c <= "Z" ? 65 : 97;
     return String.fromCharCode(((c.charCodeAt(0) - base + 13) % 26) + base);
   });
 
-const safeCalc = (expr) => {
+const safeCalc = (expr: string): number | null => {
   try {
     const sanitized = expr.replace(/\^/g, "**").replace(/[^0-9+\-*/.()%\s]/g, "").trim();
     if (!sanitized) return null;
     // eslint-disable-next-line no-new-func
-    const result = Function('"use strict"; return (' + sanitized + ")")();
+    const result = Function('"use strict"; return (' + sanitized + ")")() as number;
     if (typeof result !== "number" || !isFinite(result)) return null;
     return Number.isInteger(result) ? result : parseFloat(result.toFixed(6));
   } catch { return null; }
 };
 
-const CITY_TIMEZONES = {
+const CITY_TIMEZONES: Record<string, string> = {
   moscow: "Europe/Moscow", london: "Europe/London",
   "new york": "America/New_York", nyc: "America/New_York",
   tokyo: "Asia/Tokyo", berlin: "Europe/Berlin", paris: "Europe/Paris",
@@ -51,7 +52,12 @@ const CITY_TIMEZONES = {
   amsterdam: "Europe/Amsterdam", utc: "UTC",
 };
 
-function handleSlashCommand(cmd) {
+interface SlashResult {
+  message: string;
+  isEncoded?: boolean;
+}
+
+function handleSlashCommand(cmd: string): SlashResult | null {
   const parts = cmd.trim().slice(1).split(/\s+/);
   const command = parts[0].toLowerCase();
   const rest = parts.slice(1).join(" ");
@@ -89,123 +95,144 @@ function handleSlashCommand(cmd) {
 
 // ─── component ──────────────────────────────────────────────────────────────
 
-function ChatScreen({ chat }) {
+interface Recipient {
+  email?: string;
+  displayName?: string;
+  photoURL?: string;
+  isOnline?: boolean;
+  lastSeen?: string;
+}
+
+interface TypingData {
+  chatId: string;
+  userEmail: string;
+  wpm: number;
+  active: boolean;
+  ts: number;
+}
+
+interface PresenceData {
+  userEmail: string;
+  isOnline: boolean;
+  lastSeen?: string;
+}
+
+interface NewMessageData {
+  chatId: string;
+  message: MessageData;
+}
+
+interface ChatUpdateData {
+  chat: {
+    id: string;
+    lastRead?: Record<string, string>;
+  };
+}
+
+function ChatScreen({ chat }: { chat: Chat }) {
   const { user } = useAuth();
   const { send: wsSend } = useWS();
   const [input, setInput] = useState("");
   const navigate = useNavigate();
-  const { id: chatId } = useParams();
+  const { id: chatId } = useParams<{ id: string }>();
   const [searchParams] = useSearchParams();
   const callParam = searchParams.get("call");
 
-  // messages
-  const [messages, setMessages] = useState([]);
+  const [messages, setMessages] = useState<MessageData[]>([]);
   const [loadingMessages, setLoadingMessages] = useState(true);
 
-  // recipient
   const recipientEmail = getRecipientEmail(chat.users, user) ??
     chat.users?.find((u) => u !== user?.email) ?? chat.users?.[0];
-  const [recipient, setRecipient] = useState(null);
+  const [recipient, setRecipient] = useState<Recipient | null>(null);
 
-  // chat state (last read, typing)
-  const [recipientTyping, setRecipientTyping] = useState(null); // { wpm, ts, active }
+  const [recipientTyping, setRecipientTyping] = useState<TypingData | null>(null);
   const [recipientLastRead, setRecipientLastRead] = useState(
-    chat.lastRead?.[recipientEmail] ? new Date(chat.lastRead[recipientEmail]).getTime() : 0
+    chat.lastRead?.[recipientEmail ?? ""] ? new Date(chat.lastRead[recipientEmail ?? ""]!).getTime() : 0
   );
 
-  // vim mode
   const [vimMode, setVimMode] = useState("normal");
   const vimModeRef = useRef("normal");
-  const [selectedMsgIdx, setSelectedMsgIdx] = useState(null);
+  const [selectedMsgIdx, setSelectedMsgIdx] = useState<number | null>(null);
   const lastGPressRef = useRef(0);
-  const inputRef = useRef(null);
-  const messageContainerRef = useRef(null);
-  const messagesRef = useRef([]);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+  const messageContainerRef = useRef<HTMLDivElement>(null);
+  const messagesRef = useRef<MessageData[]>([]);
 
-  // new message glitch tracking
   const isInitialLoadRef = useRef(true);
   const prevMsgCountRef = useRef(0);
-  const [newMsgIds, setNewMsgIds] = useState(new Set());
+  const [newMsgIds, setNewMsgIds] = useState(new Set<string>());
 
-  // typing WPM
-  const keystrokeTimesRef = useRef([]);
-  const typingTimerRef = useRef(null);
+  const keystrokeTimesRef = useRef<number[]>([]);
+  const typingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastTypingUpdateRef = useRef(0);
 
   const [txCount, setTxCount] = useState(0);
-  const endOfMessageRef = useRef(null);
+  const endOfMessageRef = useRef<HTMLDivElement>(null);
   const [isMobile, setIsMobile] = useState(false);
   const [showCall, setShowCall] = useState(callParam === "callee");
-  const [callMode, setCallMode] = useState(callParam === "callee" ? "callee" : null);
+  const [callMode, setCallMode] = useState<"caller" | "callee" | null>(callParam === "callee" ? "callee" : null);
 
-  // voice recording
   const [recording, setRecording] = useState(false);
   const [recSeconds, setRecSeconds] = useState(0);
   const [uploading, setUploading] = useState(false);
-  const mediaRecorderRef = useRef(null);
-  const audioChunksRef = useRef([]);
-  const audioMimeTypeRef = useRef('');
-  const recTimerRef = useRef(null);
-  const fileInputRef = useRef(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const audioMimeTypeRef = useRef("");
+  const recTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     setIsMobile(window.matchMedia("(pointer: coarse)").matches);
   }, []);
 
-  // keep ref in sync
   useEffect(() => { messagesRef.current = messages; }, [messages]);
 
-  // ── initial data load ──────────────────────────────────────────────────
   useEffect(() => {
     if (!chatId) return;
     setLoadingMessages(true);
     Promise.all([
-      apiGet(`/api/chats/${chatId}/messages`),
-      recipientEmail ? apiGet(`/api/users?email=${encodeURIComponent(recipientEmail)}`) : Promise.resolve(null),
+      apiGet<MessageData[]>(`/api/chats/${chatId}/messages`),
+      recipientEmail ? apiGet<Recipient>(`/api/users?email=${encodeURIComponent(recipientEmail)}`) : Promise.resolve(null),
     ]).then(([msgs, rec]) => {
       setMessages(msgs || []);
       if (rec) setRecipient(rec);
     }).catch(() => {}).finally(() => setLoadingMessages(false));
 
-    // mark as read
     apiPut(`/api/chats/${chatId}/read`, {}).catch(() => {});
   }, [chatId]);
 
-  // ── WS: new messages ───────────────────────────────────────────────────
   useWSListener("new_message", (data) => {
-    if (data.chatId !== chatId) return;
-    const msg = data.message;
+    const { chatId: cid, message: msg } = data as NewMessageData;
+    if (cid !== chatId) return;
     setMessages((prev) => {
       if (prev.find((m) => m.id === msg.id)) return prev;
       return [...prev, msg];
     });
     if (msg.user !== user?.email) {
       playNotificationBeep();
-      // mark read immediately since we're in the chat
       apiPut(`/api/chats/${chatId}/read`, {}).catch(() => {});
     }
   }, [chatId, user?.email]);
 
-  // ── WS: typing indicator ───────────────────────────────────────────────
   useWSListener("typing", (data) => {
-    if (data.chatId !== chatId || data.userEmail === user?.email) return;
-    setRecipientTyping({ wpm: data.wpm, ts: data.ts, active: data.active });
+    const d = data as TypingData;
+    if (d.chatId !== chatId || d.userEmail === user?.email) return;
+    setRecipientTyping({ wpm: d.wpm, ts: d.ts, active: d.active, chatId: d.chatId, userEmail: d.userEmail });
   }, [chatId, user?.email]);
 
-  // ── WS: presence ───────────────────────────────────────────────────────
   useWSListener("presence", (data) => {
-    if (data.userEmail !== recipientEmail) return;
-    setRecipient((r) => r ? { ...r, isOnline: data.isOnline, lastSeen: data.lastSeen } : r);
+    const { userEmail, isOnline, lastSeen } = data as PresenceData;
+    if (userEmail !== recipientEmail) return;
+    setRecipient((r) => r ? { ...r, isOnline, lastSeen } : r);
   }, [recipientEmail]);
 
-  // ── WS: chat_update (read receipts) ────────────────────────────────────
   useWSListener("chat_update", (data) => {
-    if (data.chat.id !== chatId) return;
-    const lr = data.chat.lastRead?.[recipientEmail];
+    const { chat: updatedChat } = data as ChatUpdateData;
+    if (updatedChat.id !== chatId) return;
+    const lr = updatedChat.lastRead?.[recipientEmail ?? ""];
     if (lr) setRecipientLastRead(new Date(lr).getTime());
   }, [chatId, recipientEmail]);
 
-  // ── new message effects (glitch + sound + vim) ─────────────────────────
   useEffect(() => {
     const count = messages.length;
     if (isInitialLoadRef.current) {
@@ -229,16 +256,14 @@ function ChatScreen({ chat }) {
     }
   }, [messages.length]);
 
-  // ── scroll selected message into view ─────────────────────────────────
   useEffect(() => {
     if (selectedMsgIdx === null) return;
     const el = messageContainerRef.current?.querySelector(`[data-msg-idx="${selectedMsgIdx}"]`);
     el?.scrollIntoView({ block: "nearest", behavior: "smooth" });
   }, [selectedMsgIdx]);
 
-  // ── vim keyboard handler ───────────────────────────────────────────────
   useEffect(() => {
-    const handleKeyDown = (e) => {
+    const handleKeyDown = (e: KeyboardEvent) => {
       const mode = vimModeRef.current;
       if (mode === "insert") {
         if (e.key === "Escape") {
@@ -258,8 +283,8 @@ function ChatScreen({ chat }) {
       ) return;
 
       const count = messagesRef.current.length;
-      const clamp = (v) => Math.max(0, Math.min(count - 1, v));
-      const move = (delta) => setSelectedMsgIdx((prev) => clamp((prev ?? count - 1) + delta));
+      const clamp = (v: number) => Math.max(0, Math.min(count - 1, v));
+      const move = (delta: number) => setSelectedMsgIdx((prev) => clamp((prev ?? count - 1) + delta));
 
       switch (e.key) {
         case "j": e.preventDefault(); move(1); break;
@@ -300,10 +325,9 @@ function ChatScreen({ chat }) {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
-  // ── clean up typing on unmount ─────────────────────────────────────────
   useEffect(() => {
     return () => {
-      clearTimeout(typingTimerRef.current);
+      if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
       wsSend("typing", { chatId, wpm: 0, active: false });
     };
   }, []);
@@ -321,8 +345,7 @@ function ChatScreen({ chat }) {
     wsSend("typing", { chatId, wpm: 0, active: false });
   }, [chatId, wsSend]);
 
-  // ── send message ───────────────────────────────────────────────────────
-  const sendMessage = (e) => {
+  const sendMessage = (e: React.FormEvent) => {
     e.preventDefault();
     if (vimModeRef.current !== "insert") return;
     if (!input.trim()) return;
@@ -352,8 +375,7 @@ function ChatScreen({ chat }) {
     setInput("");
   };
 
-  // ── send photo ─────────────────────────────────────────────────────────
-  const compressImage = (file) => new Promise((resolve, reject) => {
+  const compressImage = (file: File): Promise<string> => new Promise((resolve, reject) => {
     const img = new Image();
     const url = URL.createObjectURL(file);
     img.onload = () => {
@@ -366,14 +388,14 @@ function ChatScreen({ chat }) {
       }
       const canvas = document.createElement("canvas");
       canvas.width = width; canvas.height = height;
-      canvas.getContext("2d").drawImage(img, 0, 0, width, height);
+      (canvas.getContext("2d") as CanvasRenderingContext2D).drawImage(img, 0, 0, width, height);
       resolve(canvas.toDataURL("image/jpeg", 0.75));
     };
     img.onerror = reject;
     img.src = url;
   });
 
-  const sendPhoto = async (e) => {
+  const sendPhoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     e.target.value = "";
@@ -385,13 +407,12 @@ function ChatScreen({ chat }) {
     } catch {}
   };
 
-  // ── voice recording ────────────────────────────────────────────────────
   const startRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const preferredType = ['audio/webm', 'audio/mp4', 'audio/ogg'].find(
+      const preferredType = ["audio/webm", "audio/mp4", "audio/ogg"].find(
         (t) => MediaRecorder.isTypeSupported(t)
-      ) || '';
+      ) || "";
       const mr = preferredType
         ? new MediaRecorder(stream, { mimeType: preferredType })
         : new MediaRecorder(stream);
@@ -408,7 +429,7 @@ function ChatScreen({ chat }) {
   const cancelRecording = () => {
     const mr = mediaRecorderRef.current;
     if (mr) { mr.stop(); mr.stream?.getTracks().forEach((t) => t.stop()); }
-    clearInterval(recTimerRef.current);
+    if (recTimerRef.current) clearInterval(recTimerRef.current);
     setRecording(false); setRecSeconds(0);
     audioChunksRef.current = [];
   };
@@ -418,7 +439,7 @@ function ChatScreen({ chat }) {
     if (!mr) return;
     const duration = recSeconds;
     mr.onstop = () => {
-      const blob = new Blob(audioChunksRef.current, { type: audioMimeTypeRef.current || 'audio/mp4' });
+      const blob = new Blob(audioChunksRef.current, { type: audioMimeTypeRef.current || "audio/mp4" });
       setUploading(true);
       const reader = new FileReader();
       reader.onloadend = async () => {
@@ -436,19 +457,19 @@ function ChatScreen({ chat }) {
     };
     mr.stop();
     mr.stream?.getTracks().forEach((t) => t.stop());
-    clearInterval(recTimerRef.current);
+    if (recTimerRef.current) clearInterval(recTimerRef.current);
     setRecording(false); setRecSeconds(0);
     audioChunksRef.current = [];
   };
 
-  const handleInputChange = (e) => {
+  const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setInput(e.target.value);
     playKeyClick();
     const now = Date.now();
     keystrokeTimesRef.current.push(now);
     keystrokeTimesRef.current = keystrokeTimesRef.current.filter((t) => now - t < 30000);
     sendTypingWS();
-    clearTimeout(typingTimerRef.current);
+    if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
     typingTimerRef.current = setTimeout(clearTypingWS, 2500);
   };
 
@@ -458,24 +479,26 @@ function ChatScreen({ chat }) {
     Date.now() - recipientTyping.ts < 4000;
 
   const displayName = recipient?.displayName || recipientEmail?.split("@")[0] || "";
-  const fmtRecTime = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+  const fmtRecTime = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+
+  const inputClass = `${styles.input} ${vimMode === "normal" ? styles.inputNormal : styles.inputInsert}`;
 
   return (
-    <Container>
-      <Header>
-        <BackButton onClick={() => navigate("/")}>
+    <div className={styles.container}>
+      <div className={styles.header}>
+        <IconButton className={styles.backButton} onClick={() => navigate("/")}>
           <ArrowBackIcon style={{ color: "#00ff41" }} />
-        </BackButton>
-        <AvatarWrapper>
+        </IconButton>
+        <div className={styles.avatarWrapper}>
           <Avatar src={recipient?.photoURL}>{recipientEmail?.[0]?.toUpperCase()}</Avatar>
-          {recipient?.isOnline && <OnlineDot />}
-        </AvatarWrapper>
-        <HeaderInformation>
+          {recipient?.isOnline && <div className={styles.onlineDot} />}
+        </div>
+        <div className={styles.headerInformation}>
           <h3>{displayName}</h3>
           {isRecipientTyping ? (
-            <TypingIndicator>
-              ▶ TRANSMITTING{recipientTyping?.wpm > 0 ? ` [${recipientTyping.wpm} WPM]` : "..."}
-            </TypingIndicator>
+            <p className={styles.typingIndicator}>
+              ▶ TRANSMITTING{recipientTyping && recipientTyping.wpm > 0 ? ` [${recipientTyping.wpm} WPM]` : "..."}
+            </p>
           ) : recipient ? (
             <p>
               {recipient.isOnline ? "Online" : recipient.lastSeen ? (
@@ -485,17 +508,19 @@ function ChatScreen({ chat }) {
           ) : (
             <p>Loading...</p>
           )}
-        </HeaderInformation>
-        <IconButton onClick={() => { setCallMode("caller"); setShowCall(true); }}
-          style={{ color: "#00ff41", marginLeft: "auto", flexShrink: 0 }}>
+        </div>
+        <IconButton
+          onClick={() => { setCallMode("caller"); setShowCall(true); }}
+          style={{ color: "#00ff41", marginLeft: "auto", flexShrink: 0 }}
+        >
           <VideoCallIcon />
         </IconButton>
-      </Header>
+      </div>
 
-      <MessageContainer ref={messageContainerRef}>
+      <div ref={messageContainerRef} className={styles.messageContainer}>
         {loadingMessages ? <Loading full={false} size={24} /> : messages.map((msg, idx) => {
-          const ts = msg.timestamp ? new Date(msg.timestamp).getTime() : 0;
-          const isRead = ts && recipientLastRead >= ts;
+          const ts = msg.timestamp ? new Date(msg.timestamp as string).getTime() : 0;
+          const isRead = !!(ts && recipientLastRead >= ts);
           return (
             <div key={msg.id} data-msg-idx={idx}>
               <Message
@@ -508,8 +533,8 @@ function ChatScreen({ chat }) {
             </div>
           );
         })}
-        <EndOfMessage ref={endOfMessageRef} />
-      </MessageContainer>
+        <div ref={endOfMessageRef} className={styles.endOfMessage} />
+      </div>
 
       <ConnectionStats
         msgCount={messages.length}
@@ -517,21 +542,29 @@ function ChatScreen({ chat }) {
         mode={vimMode}
       />
 
-      <InputContainer onSubmit={recording ? (e) => { e.preventDefault(); sendVoiceMessage(); } : sendMessage}>
+      <form
+        className={styles.inputContainer}
+        onSubmit={recording ? (e) => { e.preventDefault(); sendVoiceMessage(); } : sendMessage}
+      >
         {recording ? (
           <>
-            <RecordingIndicator>● REC {fmtRecTime(recSeconds)}</RecordingIndicator>
+            <div className={styles.recordingIndicator}>● REC {fmtRecTime(recSeconds)}</div>
             <IconButton onClick={cancelRecording} style={{ color: "#ff4141", padding: "6px" }}>
               <CloseIcon fontSize="small" />
             </IconButton>
-            <IconButton onClick={sendVoiceMessage} style={{ color: "#00ff41", padding: "6px" }} disabled={uploading}>
+            <IconButton
+              onClick={sendVoiceMessage}
+              style={{ color: "#00ff41", padding: "6px", flexShrink: 0 }}
+              disabled={uploading}
+            >
               <StopIcon fontSize="small" />
             </IconButton>
           </>
         ) : (
           <>
-            <Input
+            <textarea
               ref={inputRef}
+              className={inputClass}
               value={input}
               onChange={(e) => {
                 handleInputChange(e);
@@ -558,172 +591,52 @@ function ChatScreen({ chat }) {
                   : "Message... (/roll /flip /ping /time /encode /calc /love)"
               }
               rows={1}
-              $vimMode={vimMode}
               enterKeyHint={isMobile ? "enter" : "send"}
             />
             {vimMode === "insert" && input.trim() && (
-              <SendIcon onClick={sendMessage} style={{ color: "#00ff41", cursor: "pointer", flexShrink: 0 }} />
+              <SendIcon
+                onClick={sendMessage as unknown as React.MouseEventHandler}
+                style={{ color: "#00ff41", cursor: "pointer", flexShrink: 0 }}
+              />
             )}
             {vimMode === "insert" && !input.trim() && (
               <>
-                <IconButton onClick={() => fileInputRef.current?.click()} style={{ color: "#00ff41", padding: "6px", flexShrink: 0 }}>
+                <IconButton
+                  onClick={() => fileInputRef.current?.click()}
+                  style={{ color: "#00ff41", padding: "6px", flexShrink: 0 }}
+                >
                   <AddPhotoAlternateIcon fontSize="small" />
                 </IconButton>
-                <IconButton onClick={startRecording} style={{ color: "#00ff41", padding: "6px", flexShrink: 0 }}>
+                <IconButton
+                  onClick={startRecording}
+                  style={{ color: "#00ff41", padding: "6px", flexShrink: 0 }}
+                >
                   <MicIcon fontSize="small" />
                 </IconButton>
               </>
             )}
-            <input ref={fileInputRef} type="file" accept="image/*" style={{ display: "none" }} onChange={sendPhoto} />
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              style={{ display: "none" }}
+              onChange={sendPhoto}
+            />
           </>
         )}
-      </InputContainer>
+      </form>
 
       {showCall && (
         <CallModal
-          chatId={chatId}
-          user={user}
-          recipientEmail={recipientEmail}
+          chatId={chatId!}
+          user={user!}
+          recipientEmail={recipientEmail!}
           mode={callMode}
           onClose={() => setShowCall(false)}
         />
       )}
-    </Container>
+    </div>
   );
 }
 
 export default ChatScreen;
-
-// ─── styles ─────────────────────────────────────────────────────────────────
-
-const Container = styled.div`
-  display: flex;
-  flex-direction: column;
-  height: 100vh;
-  height: 100dvh;
-  overflow: hidden;
-`;
-
-const Input = styled.textarea`
-  flex: 1;
-  outline: 0;
-  padding: 12px 15px;
-  margin-left: 10px;
-  margin-right: 10px;
-  border-radius: 2px;
-  border: 1px solid ${({ $vimMode }) => $vimMode === "normal" ? "#1a3a0a" : "#1a3a1a"};
-  background-color: #0a150a;
-  color: ${({ $vimMode }) => $vimMode === "normal" ? "#1a6a1a" : "#00ff41"};
-  font-size: 16px;
-  font-family: 'Share Tech Mono', 'Courier New', Courier, monospace;
-  caret-color: #00ff41;
-  caret-shape: block;
-  transition: border-color 0.2s, color 0.2s;
-  resize: none;
-  overflow-y: hidden;
-  line-height: 1.4;
-  min-height: 44px;
-  max-height: 200px;
-
-  ::placeholder {
-    color: ${({ $vimMode }) => $vimMode === "normal" ? "#1a4a1a" : "#1a4a1a"};
-    font-size: 12px;
-  }
-`;
-
-const InputContainer = styled.form`
-  display: flex;
-  align-items: flex-end;
-  padding: 10px;
-  background-color: #0d150d;
-  border-top: 1px solid #1a3a1a;
-  flex-shrink: 0;
-  padding-bottom: max(10px, env(safe-area-inset-bottom));
-`;
-
-const RecordingIndicator = styled.div`
-  flex: 1;
-  padding: 10px 14px;
-  font-family: 'Share Tech Mono', 'Courier New', monospace;
-  font-size: 14px;
-  color: #ff4141;
-  animation: pulse 0.6s ease-in-out infinite alternate;
-  @keyframes pulse { from { opacity: 0.5; } to { opacity: 1; } }
-`;
-
-const Header = styled.div`
-  display: flex;
-  align-items: center;
-  padding: 11px;
-  height: 64px;
-  background-color: #0d150d;
-  border-bottom: 1px solid #1a3a1a;
-  color: #00ff41;
-  flex-shrink: 0;
-`;
-
-const AvatarWrapper = styled.div`
-  position: relative;
-  flex-shrink: 0;
-`;
-
-const OnlineDot = styled.div`
-  position: absolute;
-  bottom: 1px;
-  right: 1px;
-  width: 10px;
-  height: 10px;
-  background-color: #00ff41;
-  border-radius: 50%;
-  border: 2px solid #0d150d;
-`;
-
-const BackButton = styled(IconButton)`
-  @media (min-width: 1241px) {
-    display: none !important;
-  }
-`;
-
-const HeaderInformation = styled.div`
-  margin-left: 10px;
-  flex: 1;
-  min-width: 0;
-
-  > h3 {
-    margin: 0;
-    color: #00ff41;
-    text-shadow: 0 0 8px rgba(0, 255, 65, 0.4);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  > p {
-    font-size: 13px;
-    color: #1a7a1a;
-    margin: 0;
-  }
-`;
-
-const TypingIndicator = styled.p`
-  font-size: 12px;
-  color: #00ff41 !important;
-  margin: 0;
-  font-family: 'Share Tech Mono', 'Courier New', monospace;
-  animation: pulse 0.8s ease-in-out infinite alternate;
-  @keyframes pulse { from { opacity: 0.6; } to { opacity: 1; } }
-`;
-
-const EndOfMessage = styled.div`
-  margin-bottom: 10px;
-`;
-
-const MessageContainer = styled.div`
-  flex: 1;
-  padding: 20px;
-  background-color: #070d07;
-  overflow-y: auto;
-  ::-webkit-scrollbar { display: none; }
-  -ms-overflow-style: none;
-  scrollbar-width: none;
-`;

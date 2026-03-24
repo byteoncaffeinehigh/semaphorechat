@@ -1,0 +1,149 @@
+@keyframes pulse {
+  from { opacity: 0.5; }
+  to { opacity: 1; }
+}
+
+.container {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  padding: 11px;
+  height: 64px;
+  background-color: #0d150d;
+  border-bottom: 1px solid #1a3a1a;
+  color: #00ff41;
+  flex-shrink: 0;
+}
+
+.avatarWrapper {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.onlineDot {
+  position: absolute;
+  bottom: 1px;
+  right: 1px;
+  width: 10px;
+  height: 10px;
+  background-color: #00ff41;
+  border-radius: 50%;
+  border: 2px solid #0d150d;
+}
+
+.backButton {
+  display: none;
+}
+
+@media (max-width: 1240px) {
+  .backButton {
+    display: flex;
+  }
+}
+
+.headerInformation {
+  margin-left: 10px;
+  flex: 1;
+  min-width: 0;
+}
+
+.headerInformation > h3 {
+  margin: 0;
+  color: #00ff41;
+  text-shadow: 0 0 8px rgba(0, 255, 65, 0.4);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.headerInformation > p {
+  font-size: 13px;
+  color: #1a7a1a;
+  margin: 0;
+}
+
+.typingIndicator {
+  font-size: 12px;
+  color: #00ff41 !important;
+  margin: 0;
+  font-family: 'Share Tech Mono', 'Courier New', monospace;
+  animation: pulse 0.8s ease-in-out infinite alternate;
+}
+
+.messageContainer {
+  flex: 1;
+  padding: 20px;
+  background-color: #070d07;
+  overflow-y: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.messageContainer::-webkit-scrollbar {
+  display: none;
+}
+
+.endOfMessage {
+  margin-bottom: 10px;
+}
+
+.inputContainer {
+  display: flex;
+  align-items: flex-end;
+  padding: 10px;
+  background-color: #0d150d;
+  border-top: 1px solid #1a3a1a;
+  flex-shrink: 0;
+  padding-bottom: max(10px, env(safe-area-inset-bottom));
+}
+
+.input {
+  flex: 1;
+  outline: 0;
+  padding: 12px 15px;
+  margin-left: 10px;
+  margin-right: 10px;
+  border-radius: 2px;
+  background-color: #0a150a;
+  font-size: 16px;
+  font-family: 'Share Tech Mono', 'Courier New', Courier, monospace;
+  caret-color: #00ff41;
+  caret-shape: block;
+  transition: border-color 0.2s, color 0.2s;
+  resize: none;
+  overflow-y: hidden;
+  line-height: 1.4;
+  min-height: 44px;
+  max-height: 200px;
+}
+
+.input::placeholder {
+  color: #1a4a1a;
+  font-size: 12px;
+}
+
+.inputNormal {
+  border: 1px solid #1a3a0a;
+  color: #1a6a1a;
+}
+
+.inputInsert {
+  border: 1px solid #1a3a1a;
+  color: #00ff41;
+}
+
+.recordingIndicator {
+  flex: 1;
+  padding: 10px 14px;
+  font-family: 'Share Tech Mono', 'Courier New', monospace;
+  font-size: 14px;
+  color: #ff4141;
+  animation: pulse 0.6s ease-in-out infinite alternate;
+}

@@ -1,10 +1,4 @@
-import styled from "styled-components";
-
-export default function ScanlinesOverlay() {
-  return <Overlay />;
-}
-
-const Overlay = styled.div`
+.overlay {
   position: fixed;
   inset: 0;
   pointer-events: none;
@@ -16,4 +10,4 @@ const Overlay = styled.div`
     rgba(0, 0, 0, 0.045) 2px,
     rgba(0, 0, 0, 0.045) 4px
   );
-`;
+}

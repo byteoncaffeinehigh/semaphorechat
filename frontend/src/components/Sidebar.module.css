@@ -1,0 +1,154 @@
+.container {
+  min-width: 340px;
+  background-color: #0d150d;
+  color: #00ff41;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+  border-right: 1px solid #1a3a1a;
+  box-shadow: 4px 0 20px rgba(0, 255, 65, 0.04);
+}
+
+@media (max-width: 1240px) {
+  .container {
+    grid-column-start: 1;
+    grid-column-end: 4;
+    grid-row-start: 1;
+    grid-row-end: 3;
+    max-width: 100%;
+  }
+}
+
+.chatList {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.chatList::-webkit-scrollbar {
+  display: none;
+}
+
+.header {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  background-color: #0d150d;
+  border-bottom: 1px solid #1a3a1a;
+}
+
+.searchWrapper {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  background-color: #0a150a;
+  border: 1px solid #1a3a1a;
+  border-radius: 4px;
+  padding: 6px 10px;
+  gap: 6px;
+}
+
+.searchWrapper:focus-within {
+  border-color: #00ff41;
+}
+
+.searchInput {
+  flex: 1;
+  background: none;
+  border: none;
+  outline: none;
+  color: #00ff41;
+  font-size: 16px;
+  font-family: 'Share Tech Mono', 'Courier New', Courier, monospace;
+}
+
+.searchInput::placeholder {
+  color: #1a5a1a;
+}
+
+.newChatButton {
+  background: none;
+  border: 1px solid #1a5a1a;
+  color: #00ff41;
+  font-family: 'Share Tech Mono', 'Courier New', Courier, monospace;
+  font-size: 13px;
+  padding: 0 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  white-space: nowrap;
+  letter-spacing: 1px;
+  align-self: stretch;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.newChatButton:hover {
+  border-color: #00ff41;
+  box-shadow: 0 0 8px rgba(0, 255, 65, 0.2);
+}
+
+.footer {
+  flex-shrink: 0;
+  padding: 10px 12px;
+  border-top: 1px solid #1a3a1a;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background-color: #0d150d;
+}
+
+.footerInfo {
+  flex: 1;
+  min-width: 0;
+}
+
+.footerName {
+  color: #00ff41;
+  font-size: 0.85em;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.footerEmail {
+  color: #1a5a1a;
+  font-size: 0.7em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.helpBtn {
+  background: none;
+  border: none;
+  color: #1a7a1a;
+  font-family: 'Share Tech Mono', 'Courier New', monospace;
+  font-size: 13px;
+  cursor: pointer;
+  flex-shrink: 0;
+  padding: 0;
+  transition: color 0.15s;
+}
+
+.helpBtn:hover {
+  color: #00ff41;
+}
+
+.nameInput {
+  background: none;
+  border: none;
+  border-bottom: 1px solid #00ff41;
+  color: #00ff41;
+  font-family: 'Share Tech Mono', 'Courier New', Courier, monospace;
+  font-size: 0.85em;
+  outline: none;
+  width: 100%;
+  padding: 0;
+}

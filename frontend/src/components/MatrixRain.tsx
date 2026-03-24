@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from "react";
-import styled, { keyframes, css } from "styled-components";
+import styles from "./MatrixRain.module.css";
 
 const IDLE_TIMEOUT = 60 * 1000;
 
@@ -7,13 +7,18 @@ const CHARS =
   "アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲン" +
   "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789@#$%^&*()_+-=[]{}|;:<>?/\\~`";
 
-export default function MatrixRain({ forceVisible = false, onForceHide }) {
-  const canvasRef = useRef(null);
+interface MatrixRainProps {
+  forceVisible?: boolean;
+  onForceHide?: () => void;
+}
+
+export default function MatrixRain({ forceVisible = false, onForceHide }: MatrixRainProps) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
   const [visible, setVisible] = useState(false);
   const [fading, setFading] = useState(false);
-  const timerRef = useRef(null);
-  const animRef = useRef(null);
-  const columnsRef = useRef([]);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const animRef = useRef<number>(0);
+  const columnsRef = useRef<number[]>([]);
   const isForcedRef = useRef(false);
 
   const hide = useCallback(() => {
@@ -27,37 +32,34 @@ export default function MatrixRain({ forceVisible = false, onForceHide }) {
   const resetTimer = useCallback(() => {
     if (isForcedRef.current) onForceHide?.();
     if (visible) hide();
-    clearTimeout(timerRef.current);
+    if (timerRef.current) clearTimeout(timerRef.current);
     timerRef.current = setTimeout(() => {
       setVisible(true);
     }, IDLE_TIMEOUT);
   }, [visible, hide, onForceHide]);
 
-  // Handle forceVisible prop
   useEffect(() => {
     isForcedRef.current = forceVisible;
     if (forceVisible) {
-      clearTimeout(timerRef.current);
+      if (timerRef.current) clearTimeout(timerRef.current);
       setFading(false);
       setVisible(true);
     } else if (!forceVisible && visible) {
       hide();
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [forceVisible]);
 
-  // Start idle timer
   useEffect(() => {
-    const events = ["mousemove", "mousedown", "keydown", "touchstart", "scroll"];
-    events.forEach(e => window.addEventListener(e, resetTimer));
+    const events = ["mousemove", "mousedown", "keydown", "touchstart", "scroll"] as const;
+    events.forEach((e) => window.addEventListener(e, resetTimer));
     timerRef.current = setTimeout(() => setVisible(true), IDLE_TIMEOUT);
     return () => {
-      events.forEach(e => window.removeEventListener(e, resetTimer));
-      clearTimeout(timerRef.current);
+      events.forEach((e) => window.removeEventListener(e, resetTimer));
+      if (timerRef.current) clearTimeout(timerRef.current);
     };
   }, [resetTimer]);
 
-  // Matrix rain animation
   useEffect(() => {
     if (!visible) {
       cancelAnimationFrame(animRef.current);
@@ -67,6 +69,7 @@ export default function MatrixRain({ forceVisible = false, onForceHide }) {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
+    if (!ctx) return;
 
     const resize = () => {
       canvas.width = window.innerWidth;
@@ -83,7 +86,7 @@ export default function MatrixRain({ forceVisible = false, onForceHide }) {
     const fps = 20;
     const interval = 1000 / fps;
 
-    const draw = (timestamp) => {
+    const draw = (timestamp: number) => {
       if (timestamp - lastTime < interval) {
         animRef.current = requestAnimationFrame(draw);
         return;
@@ -99,14 +102,12 @@ export default function MatrixRain({ forceVisible = false, onForceHide }) {
         const x = i * 16;
         const y = cols[i] * 20;
 
-        // Brightest char at the front
         ctx.fillStyle = "#aaffaa";
         ctx.shadowColor = "#00ff41";
         ctx.shadowBlur = 8;
         ctx.font = "bold 14px monospace";
         ctx.fillText(char, x, y);
 
-        // Trail chars
         ctx.fillStyle = "#00ff41";
         ctx.shadowBlur = 4;
         ctx.font = "14px monospace";
@@ -122,7 +123,6 @@ export default function MatrixRain({ forceVisible = false, onForceHide }) {
         }
       }
 
-      // Center overlay text
       const centerX = canvas.width / 2;
       const centerY = canvas.height / 2;
       ctx.font = "bold 18px monospace";
@@ -156,36 +156,11 @@ export default function MatrixRain({ forceVisible = false, onForceHide }) {
 
   if (!visible && !fading) return null;
 
+  const overlayClass = `${styles.overlay} ${fading ? styles.overlayFading : styles.overlayVisible}`;
+
   return (
-    <Overlay fading={fading}>
-      <Canvas ref={canvasRef} />
-    </Overlay>
+    <div className={overlayClass}>
+      <canvas ref={canvasRef} className={styles.canvas} />
+    </div>
   );
 }
-
-const fadeIn = keyframes`
-  from { opacity: 0; }
-  to { opacity: 1; }
-`;
-
-const fadeOut = keyframes`
-  from { opacity: 1; }
-  to { opacity: 0; }
-`;
-
-const Overlay = styled.div`
-  position: fixed;
-  inset: 0;
-  z-index: 9999;
-  cursor: none;
-  animation: ${({ fading }) =>
-    fading
-      ? css`${fadeOut} 0.8s ease forwards`
-      : css`${fadeIn} 0.8s ease forwards`};
-`;
-
-const Canvas = styled.canvas`
-  display: block;
-  width: 100%;
-  height: 100%;
-`;

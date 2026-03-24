@@ -1,9 +1,6 @@
 /**
  * WebSocket context — single persistent connection per user session.
  *
- * Dispatches server events to registered listeners.
- * Components register/unregister listeners via useWSListener().
- *
  * Server event types:
  *   new_message   { chatId, message }
  *   typing        { chatId, userEmail, wpm, active, ts }
@@ -20,23 +17,31 @@ import {
   useEffect,
   useRef,
   useCallback,
+  ReactNode,
 } from "react";
 import { getAccessToken, API_BASE } from "./api";
+import { User } from "./AuthContext";
 
-const WSContext = createContext(null);
+type WSListener = (data: unknown) => void;
+
+interface WSContextType {
+  send: (type: string, data: unknown) => void;
+  subscribe: (type: string, fn: WSListener) => () => void;
+}
+
+const WSContext = createContext<WSContextType | null>(null);
 
 const WS_BASE = API_BASE.replace(/^http/, "ws");
 
-export function WSProvider({ user, children }) {
-  const wsRef = useRef(null);
-  const listenersRef = useRef({}); // { eventType: Set<fn> }
-  const reconnectTimer = useRef(null);
+export function WSProvider({ user, children }: { user: User; children: ReactNode }) {
+  const wsRef = useRef<WebSocket | null>(null);
+  const listenersRef = useRef<Record<string, Set<WSListener>>>({});
+  const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const mountedRef = useRef(true);
 
-  const dispatch = useCallback((type, data) => {
+  const dispatch = useCallback((type: string, data: unknown) => {
     const set = listenersRef.current[type];
     if (set) set.forEach((fn) => fn(data));
-    // also dispatch to wildcard listeners
     const all = listenersRef.current["*"];
     if (all) all.forEach((fn) => fn({ type, data }));
   }, []);
@@ -50,12 +55,12 @@ export function WSProvider({ user, children }) {
     wsRef.current = ws;
 
     ws.onopen = () => {
-      clearTimeout(reconnectTimer.current);
+      if (reconnectTimer.current) clearTimeout(reconnectTimer.current);
     };
 
     ws.onmessage = (e) => {
       try {
-        const { type, data } = JSON.parse(e.data);
+        const { type, data } = JSON.parse(e.data as string) as { type: string; data: unknown };
         dispatch(type, data);
       } catch {}
     };
@@ -68,27 +73,24 @@ export function WSProvider({ user, children }) {
     ws.onerror = () => ws.close();
   }, [dispatch]);
 
-  // Connect when user logs in, disconnect on logout
   useEffect(() => {
     mountedRef.current = true;
-    if (user) {
-      connect();
-    }
+    if (user) connect();
     return () => {
       mountedRef.current = false;
-      clearTimeout(reconnectTimer.current);
+      if (reconnectTimer.current) clearTimeout(reconnectTimer.current);
       wsRef.current?.close();
     };
   }, [user?.id, connect]);
 
-  const send = useCallback((type, data) => {
+  const send = useCallback((type: string, data: unknown) => {
     const ws = wsRef.current;
     if (ws?.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify({ type, data }));
     }
   }, []);
 
-  const subscribe = useCallback((type, fn) => {
+  const subscribe = useCallback((type: string, fn: WSListener): (() => void) => {
     if (!listenersRef.current[type]) {
       listenersRef.current[type] = new Set();
     }
@@ -103,20 +105,15 @@ export function WSProvider({ user, children }) {
   );
 }
 
-export function useWS() {
-  return useContext(WSContext);
+export function useWS(): WSContextType {
+  const ctx = useContext(WSContext);
+  if (!ctx) throw new Error("useWS must be used within WSProvider");
+  return ctx;
 }
 
-/**
- * Subscribe to a specific WS event type for the lifetime of the component.
- * @param {string} type  event type, e.g. "new_message"
- * @param {function} fn  callback(data)
- * @param {array} deps   extra deps that should trigger re-subscription
- */
-export function useWSListener(type, fn, deps = []) {
+export function useWSListener(type: string, fn: WSListener, deps: unknown[] = []): void {
   const { subscribe } = useWS();
   useEffect(() => {
-    if (!subscribe) return;
     return subscribe(type, fn);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [type, subscribe, ...deps]);

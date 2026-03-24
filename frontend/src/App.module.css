@@ -1,0 +1,75 @@
+@keyframes pulse {
+  from { opacity: 0.5; }
+  to { opacity: 1; }
+}
+
+.callOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.93);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  font-family: 'Share Tech Mono', 'Courier New', monospace;
+}
+
+.callBox {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 28px;
+  padding: 48px 40px;
+  border: 1px solid #1a3a1a;
+  background: #070d07;
+  min-width: 280px;
+}
+
+.callLabel {
+  font-size: 12px;
+  color: #1a7a1a;
+  letter-spacing: 0.15em;
+  animation: pulse 0.8s ease-in-out infinite alternate;
+}
+
+.callCaller {
+  font-size: 26px;
+  color: #00ff41;
+  text-shadow: 0 0 20px rgba(0, 255, 65, 0.5);
+  letter-spacing: 0.05em;
+}
+
+.callButtons {
+  display: flex;
+  gap: 16px;
+}
+
+.acceptBtn {
+  background: #0a2a0a;
+  color: #00ff41;
+  border: 1px solid #1a5a1a;
+  padding: 8px 22px;
+  font-family: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  letter-spacing: 0.08em;
+}
+
+.acceptBtn:hover {
+  background: #0d3a0d;
+}
+
+.declineBtn {
+  background: #2a0a0a;
+  color: #ff4141;
+  border: 1px solid #5a1a1a;
+  padding: 8px 22px;
+  font-family: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  letter-spacing: 0.08em;
+}
+
+.declineBtn:hover {
+  background: #3a1010;
+}

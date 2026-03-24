@@ -1,0 +1,35 @@
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+.overlay {
+  display: grid;
+  place-items: center;
+  background-color: #070d07;
+}
+
+.overlayFull {
+  height: 100vh;
+}
+
+.overlayPartial {
+  height: 100%;
+}
+
+.spinner {
+  border: 2px solid #1a3a1a;
+  border-top-color: #00ff41;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+.logo {
+  display: block;
+  margin: 0 auto 16px;
+  animation: pulse 2s ease-in-out infinite;
+}
