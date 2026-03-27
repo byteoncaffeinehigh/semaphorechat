@@ -1,8 +1,10 @@
 package handlers
 
 import (
+	"bytes"
 	"encoding/json"
 	"net/http"
+	"strings"
 
 	"antares-chat/backend/config"
 	"antares-chat/backend/db"
@@ -21,7 +23,7 @@ func NewPushHandler(store *db.Store, cfg *config.Config) *PushHandler {
 	return &PushHandler{store: store, cfg: cfg}
 }
 
-// POST /api/push/subscribe
+// POST /api/push/subscribe — Web Push (VAPID, browser)
 // Body mirrors the browser PushSubscription.toJSON() shape:
 // { endpoint, keys: { p256dh, auth } }
 func (h *PushHandler) Subscribe(c *gin.Context) {
@@ -49,6 +51,29 @@ func (h *PushHandler) Subscribe(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"ok": true})
 }
 
+// POST /api/push/expo-token — Expo Push Notifications (React Native)
+// Body: { token: "ExponentPushToken[xxx]" }
+func (h *PushHandler) ExpoSubscribe(c *gin.Context) {
+	var body struct {
+		Token string `json:"token" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	sub := models.PushSubscription{
+		Endpoint: body.Token,
+		P256dh:   "",
+		Auth:     "expo",
+	}
+	if err := h.store.SavePushSubscription(c, middleware.UserIDFrom(c), sub); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "server error"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"ok": true})
+}
+
 // POST /api/notify
 // Body: { recipientEmail, senderName, message, link?, isCall? }
 func (h *PushHandler) Notify(c *gin.Context) {
@@ -64,48 +89,68 @@ func (h *PushHandler) Notify(c *gin.Context) {
 		return
 	}
 
-	if h.cfg.VAPIDPublicKey == "" || h.cfg.VAPIDPrivateKey == "" {
-		c.JSON(http.StatusOK, gin.H{"ok": false, "reason": "vapid not configured"})
-		return
-	}
-
 	subs, err := h.store.GetPushSubscriptionsByEmail(c, body.RecipientEmail)
 	if err != nil || len(subs) == 0 {
 		c.JSON(http.StatusOK, gin.H{"ok": false, "reason": "no subscription"})
 		return
 	}
 
-	payload, _ := json.Marshal(map[string]any{
+	urgency := webpush.UrgencyNormal
+	if body.IsCall {
+		urgency = webpush.UrgencyHigh
+	}
+
+	webPayload, _ := json.Marshal(map[string]any{
 		"title":  body.SenderName,
 		"body":   truncate(body.Message, 120),
 		"link":   ifEmpty(body.Link, "/"),
 		"isCall": body.IsCall,
 	})
 
-	urgency := webpush.UrgencyNormal
-	if body.IsCall {
-		urgency = webpush.UrgencyHigh
-	}
-
 	for _, sub := range subs {
-		wpSub := &webpush.Subscription{
-			Endpoint: sub.Endpoint,
-			Keys: webpush.Keys{
-				P256dh: sub.P256dh,
-				Auth:   sub.Auth,
-			},
+		if sub.Auth == "expo" || strings.HasPrefix(sub.Endpoint, "ExponentPushToken[") {
+			sendExpoPush(sub.Endpoint, body.SenderName, truncate(body.Message, 120), body.IsCall)
+		} else if h.cfg.VAPIDPublicKey != "" && h.cfg.VAPIDPrivateKey != "" {
+			wpSub := &webpush.Subscription{
+				Endpoint: sub.Endpoint,
+				Keys: webpush.Keys{
+					P256dh: sub.P256dh,
+					Auth:   sub.Auth,
+				},
+			}
+			//nolint:errcheck
+			webpush.SendNotification(webPayload, wpSub, &webpush.Options{
+				VAPIDPublicKey:  h.cfg.VAPIDPublicKey,
+				VAPIDPrivateKey: h.cfg.VAPIDPrivateKey,
+				Subscriber:      h.cfg.VAPIDEmail,
+				Urgency:         urgency,
+				TTL:             30,
+			})
 		}
-		//nolint:errcheck
-		webpush.SendNotification(payload, wpSub, &webpush.Options{
-			VAPIDPublicKey:  h.cfg.VAPIDPublicKey,
-			VAPIDPrivateKey: h.cfg.VAPIDPrivateKey,
-			Subscriber:      h.cfg.VAPIDEmail,
-			Urgency:         urgency,
-			TTL:             30,
-		})
 	}
 
 	c.JSON(http.StatusOK, gin.H{"ok": true})
+}
+
+func sendExpoPush(token, title, body string, isCall bool) {
+	priority := "normal"
+	if isCall {
+		priority = "high"
+	}
+	payload, _ := json.Marshal(map[string]any{
+		"to":       token,
+		"title":    title,
+		"body":     body,
+		"priority": priority,
+	})
+	req, err := http.NewRequest("POST", "https://exp.host/--/api/v2/push/send", bytes.NewReader(payload))
+	if err != nil {
+		return
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json")
+	//nolint:errcheck
+	http.DefaultClient.Do(req)
 }
 
 func truncate(s string, n int) string {

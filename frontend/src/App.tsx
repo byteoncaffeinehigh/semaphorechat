@@ -6,6 +6,7 @@ import { WSProvider, useWSListener } from "./utils/WSContext";
 import { apiGet, apiPost, apiPut } from "./utils/api";
 import { ChatsContext, type Chat } from "./utils/ChatsContext";
 import { startCallRingtone, stopCallRingtone } from "./utils/sounds";
+import { setBadgeCount, sendDesktopNotification, isTauri } from "./utils/tauri";
 
 import Login from "./pages/Login";
 import Home from "./pages/Home";
@@ -69,6 +70,29 @@ function AppInner() {
       return next;
     });
   }, []);
+
+  // Keep tray badge in sync with total unread count (desktop only)
+  useEffect(() => {
+    if (!isTauri() || !user) return;
+    const total = chats.reduce(
+      (sum, c) => sum + (c.unreadCounts?.[user.email] ?? 0),
+      0
+    );
+    setBadgeCount(total);
+  }, [chats, user?.email]);
+
+  // Native desktop notification on new message when window is not focused (desktop only)
+  useWSListener("new_message", (raw) => {
+    if (!isTauri()) return;
+    if (document.hasFocus()) return;
+    const { message } = raw as {
+      message: { user: string; message?: string; imageURL?: string; audioURL?: string };
+    };
+    if (message.user === user?.email) return;
+    const sender = message.user.split("@")[0];
+    const body = message.message ?? (message.imageURL ? "📷 Image" : "🎤 Audio");
+    sendDesktopNotification("SemaphoreChat", `${sender}: ${body}`);
+  }, [user?.email]);
 
   useWSListener("call_update", (raw) => {
     const { chatId, call } = raw as CallUpdateData;

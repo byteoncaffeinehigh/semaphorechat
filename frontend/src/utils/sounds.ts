@@ -91,6 +91,7 @@ export const stopCallRingtone = (): void => {
 export const playKeyClick = (): void => {
   try {
     const c = getCtx();
+    if (c.state === "suspended") c.resume();
     const len = Math.floor(c.sampleRate * 0.018);
     const buf = c.createBuffer(1, len, c.sampleRate);
     const d = buf.getChannelData(0);
@@ -110,6 +111,7 @@ export const playKeyClick = (): void => {
 export const playNotificationBeep = (): void => {
   try {
     const c = getCtx();
+    if (c.state === "suspended") c.resume();
     [880, 1320].forEach((freq, i) => {
       const osc = c.createOscillator();
       const gain = c.createGain();

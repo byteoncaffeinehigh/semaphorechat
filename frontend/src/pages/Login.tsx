@@ -1,57 +1,13 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useAuth } from "../utils/AuthContext";
 import styles from "./Login.module.css";
 
-declare global {
-  interface Window {
-    google?: {
-      accounts: {
-        id: {
-          initialize: (config: {
-            client_id: string;
-            callback: (response: { credential: string }) => void;
-          }) => void;
-          prompt: () => void;
-        };
-      };
-    };
-  }
-}
-
 function Login() {
-  const { loginEmail, registerEmail, loginGoogle } = useAuth();
+  const { loginEmail, registerEmail } = useAuth();
   const [mode, setMode] = useState<"main" | "signin" | "signup">("main");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
-
-  useEffect(() => {
-    if (!import.meta.env.VITE_GOOGLE_CLIENT_ID) return;
-    const script = document.createElement("script");
-    script.src = "https://accounts.google.com/gsi/client";
-    script.async = true;
-    script.defer = true;
-    document.head.appendChild(script);
-    return () => { document.head.removeChild(script); };
-  }, []);
-
-  const signInGoogle = () => {
-    if (!window.google || !import.meta.env.VITE_GOOGLE_CLIENT_ID) {
-      setError("Google Sign-In is not configured");
-      return;
-    }
-    window.google.accounts.id.initialize({
-      client_id: import.meta.env.VITE_GOOGLE_CLIENT_ID as string,
-      callback: async ({ credential }) => {
-        try {
-          await loginGoogle(credential);
-        } catch {
-          setError("Google sign-in failed");
-        }
-      },
-    });
-    window.google.accounts.id.prompt();
-  };
 
   const getErrorMessage = (err: unknown): string => {
     const msg = (err as Error)?.message || "";
@@ -92,13 +48,8 @@ function Login() {
 
         {mode === "main" && (
           <>
-            {import.meta.env.VITE_GOOGLE_CLIENT_ID && (
-              <>
-                <button className={styles.button} onClick={signInGoogle}>Sign in with Google</button>
-                <div className={styles.divider}>or</div>
-              </>
-            )}
             <button className={styles.button} onClick={() => setMode("signin")}>Sign in with Email</button>
+            <button className={styles.textButton} onClick={() => setMode("signup")}>No account? Sign up</button>
           </>
         )}
 

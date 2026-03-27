@@ -34,10 +34,9 @@ func main() {
 	r := gin.Default()
 
 	r.Use(cors.New(cors.Config{
-		AllowOrigins:     []string{cfg.FrontendURL},
-		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-		AllowHeaders:     []string{"Authorization", "Content-Type"},
-		AllowCredentials: true,
+		AllowAllOrigins: true,
+		AllowMethods:    []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowHeaders:    []string{"Authorization", "Content-Type"},
 	}))
 
 	// ── Frontend static files ───────────────────────────────────────────────
@@ -49,11 +48,7 @@ func main() {
 
 	// Config injection — exposes server-side env vars to the browser
 	r.GET("/config.js", func(c *gin.Context) {
-		js := fmt.Sprintf(
-			"window.GOOGLE_CLIENT_ID=%q;\nwindow.VAPID_PUBLIC_KEY=%q;\n",
-			cfg.GoogleClientID,
-			cfg.VAPIDPublicKey,
-		)
+		js := fmt.Sprintf("window.VAPID_PUBLIC_KEY=%q;\n", cfg.VAPIDPublicKey)
 		c.Data(http.StatusOK, "application/javascript; charset=utf-8", []byte(js))
 	})
 
@@ -61,7 +56,6 @@ func main() {
 	authH := handlers.NewAuthHandler(store, cfg)
 	r.POST("/api/auth/register", authH.Register)
 	r.POST("/api/auth/login", authH.Login)
-	r.POST("/api/auth/google", authH.GoogleLogin)
 	r.POST("/api/auth/refresh", authH.Refresh)
 
 	// WebSocket (authenticates via ?token= query param)
@@ -95,6 +89,7 @@ func main() {
 
 	pushH := handlers.NewPushHandler(store, cfg)
 	api.POST("/push/subscribe", pushH.Subscribe)
+	api.POST("/push/expo-token", pushH.ExpoSubscribe)
 	api.POST("/notify", pushH.Notify)
 
 	// health

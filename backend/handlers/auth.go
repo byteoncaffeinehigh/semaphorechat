@@ -1,9 +1,6 @@
 package handlers
 
 import (
-	"context"
-	"encoding/json"
-	"fmt"
 	"net/http"
 	"time"
 
@@ -103,41 +100,6 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	})
 }
 
-// POST /api/auth/google
-// Body: { idToken: string }  (Google credential JWT from frontend GSI)
-func (h *AuthHandler) GoogleLogin(c *gin.Context) {
-	var body struct {
-		IDToken string `json:"idToken" binding:"required"`
-	}
-	if err := c.ShouldBindJSON(&body); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-
-	info, err := verifyGoogleToken(c, body.IDToken)
-	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid Google token"})
-		return
-	}
-
-	user, err := h.store.CreateUser(c, info.Email, "", info.Sub, info.Name, info.Picture)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "server error"})
-		return
-	}
-
-	accessToken, refreshToken, err := h.issueTokens(user.ID, user.Email)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "server error"})
-		return
-	}
-	c.JSON(http.StatusOK, gin.H{
-		"user":         user,
-		"accessToken":  accessToken,
-		"refreshToken": refreshToken,
-	})
-}
-
 // POST /api/auth/refresh
 func (h *AuthHandler) Refresh(c *gin.Context) {
 	var body struct {
@@ -198,31 +160,3 @@ func (h *AuthHandler) issueTokens(userID, email string) (string, string, error) 
 	return at, rt, nil
 }
 
-// verifyGoogleToken calls Google's tokeninfo endpoint to validate the ID token.
-type googleTokenInfo struct {
-	Sub     string `json:"sub"`
-	Email   string `json:"email"`
-	Name    string `json:"name"`
-	Picture string `json:"picture"`
-}
-
-func verifyGoogleToken(ctx context.Context, idToken string) (*googleTokenInfo, error) {
-	url := "https://oauth2.googleapis.com/tokeninfo?id_token=" + idToken
-	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("google tokeninfo status %d", resp.StatusCode)
-	}
-	var info googleTokenInfo
-	if err := json.NewDecoder(resp.Body).Decode(&info); err != nil {
-		return nil, err
-	}
-	if info.Email == "" {
-		return nil, fmt.Errorf("no email in google token")
-	}
-	return &info, nil
-}

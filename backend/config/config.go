@@ -11,7 +11,6 @@ type Config struct {
 	JWTRefreshSecret string
 	Port            string
 	FrontendURL     string
-	GoogleClientID  string
 	VAPIDPublicKey  string
 	VAPIDPrivateKey string
 	VAPIDEmail      string
@@ -24,7 +23,6 @@ func Load() *Config {
 		JWTRefreshSecret: mustEnv("JWT_REFRESH_SECRET"),
 		Port:             getEnv("PORT", "8080"),
 		FrontendURL:      getEnv("FRONTEND_URL", "http://localhost:8080"),
-		GoogleClientID:   getEnv("GOOGLE_CLIENT_ID", ""),
 		VAPIDPublicKey:   getEnv("VAPID_PUBLIC_KEY", ""),
 		VAPIDPrivateKey:  getEnv("VAPID_PRIVATE_KEY", ""),
 		VAPIDEmail:       getEnv("VAPID_EMAIL", "mailto:admin@example.com"),

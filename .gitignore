@@ -1,4 +1,23 @@
+# Environment
 .env
+.env.*
+
+# Git
 .git
+
+# Dependencies
 **/node_modules/
+
+# Build output
 **/dist/
+frontend/src-tauri/target/
+frontend/src-tauri/gen/
+
+# Expo / React Native
+mobile/.expo/
+mobile/android/
+mobile/ios/
+
+# OS
+.DS_Store
+Thumbs.db
