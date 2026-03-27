@@ -32,13 +32,14 @@ func (h *UserHandler) GetMe(c *gin.Context) {
 // PUT /api/me
 func (h *UserHandler) UpdateMe(c *gin.Context) {
 	var body struct {
-		DisplayName string `json:"displayName" binding:"required"`
+		DisplayName string `json:"displayName"`
+		PhotoURL    string `json:"photoURL"`
 	}
 	if err := c.ShouldBindJSON(&body); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	if err := h.store.UpdateUser(c, middleware.UserIDFrom(c), body.DisplayName); err != nil {
+	if err := h.store.UpdateUser(c, middleware.UserIDFrom(c), body.DisplayName, body.PhotoURL); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "update failed"})
 		return
 	}

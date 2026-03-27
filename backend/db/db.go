@@ -84,9 +84,10 @@ func (s *Store) GetGoogleUser(ctx context.Context, googleID string) (*models.Use
 		FROM users WHERE google_id = $1`, googleID))
 }
 
-func (s *Store) UpdateUser(ctx context.Context, id, displayName string) error {
+func (s *Store) UpdateUser(ctx context.Context, id, displayName, photoURL string) error {
 	_, err := s.pool.Exec(ctx,
-		`UPDATE users SET display_name = $1 WHERE id = $2`, displayName, id)
+		`UPDATE users SET display_name = $1, photo_url = CASE WHEN $2 = '' THEN photo_url ELSE $2 END WHERE id = $3`,
+		displayName, photoURL, id)
 	return err
 }
 

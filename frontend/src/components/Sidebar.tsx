@@ -1,4 +1,4 @@
-import { Avatar, IconButton } from "@mui/material";
+import { Avatar, IconButton, Tooltip } from "@mui/material";
 import * as EmailValidator from "email-validator";
 import { useAuth } from "../utils/AuthContext";
 import { apiGet, apiPost, apiPut } from "../utils/api";
@@ -7,6 +7,7 @@ import LogoutIcon from "@mui/icons-material/Logout";
 import EditIcon from "@mui/icons-material/Edit";
 import CheckIcon from "@mui/icons-material/Check";
 import SearchIcon from "@mui/icons-material/Search";
+import ShuffleIcon from "@mui/icons-material/Shuffle";
 import { useSignOut } from "../utils/ChatsContext";
 import { useState, useContext } from "react";
 import { useNavigate } from "react-router-dom";
@@ -19,9 +20,10 @@ interface UserData {
 }
 
 function Sidebar() {
-  const { user } = useAuth();
+  const { user, regenerateAvatar } = useAuth();
   const { chats, setChats } = useContext(ChatsContext);
   const [editingName, setEditingName] = useState(false);
+  const [regenerating, setRegenerating] = useState(false);
   const [nameInput, setNameInput] = useState("");
   const [displayName, setDisplayName] = useState(user?.displayName || user?.email?.split("@")[0] || "");
   const [search, setSearch] = useState("");
@@ -93,12 +95,21 @@ function Sidebar() {
       </div>
 
       <div className={styles.footer}>
-        <Avatar
-          src={user?.photoURL}
-          style={{ width: 36, height: 36, fontSize: "0.9rem", flexShrink: 0 }}
-        >
-          {user?.email?.[0]?.toUpperCase()}
-        </Avatar>
+        <Tooltip title="Regenerate avatar" placement="top">
+          <span style={{ position: "relative", flexShrink: 0, cursor: "pointer" }} onClick={async () => {
+            if (regenerating) return;
+            setRegenerating(true);
+            try { await regenerateAvatar(); } finally { setRegenerating(false); }
+          }}>
+            <Avatar
+              src={user?.photoURL}
+              style={{ width: 36, height: 36, fontSize: "0.9rem", opacity: regenerating ? 0.5 : 1 }}
+            >
+              {user?.email?.[0]?.toUpperCase()}
+            </Avatar>
+            <ShuffleIcon style={{ position: "absolute", bottom: -4, right: -4, fontSize: 14, color: "#00ff41", background: "#0d1a0d", borderRadius: "50%", padding: 1 }} />
+          </span>
+        </Tooltip>
         <div className={styles.footerInfo}>
           {editingName ? (
             <input

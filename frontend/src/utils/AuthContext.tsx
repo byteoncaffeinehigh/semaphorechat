@@ -1,11 +1,13 @@
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from "react";
 import {
   apiPost,
+  apiPut,
   setTokens,
   clearTokens,
   loadStoredRefreshToken,
   API_BASE,
 } from "./api";
+import { generateAvatar } from "./avatarGenerator";
 
 export interface User {
   id: string;
@@ -23,6 +25,7 @@ interface AuthContextType {
   registerEmail: (email: string, password: string) => Promise<User>;
   signOut: () => void;
   updateProfile: (displayName: string) => Promise<User>;
+  regenerateAvatar: () => Promise<void>;
   setUser: (user: User | null) => void;
 }
 
@@ -75,7 +78,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const registerEmail = useCallback(async (email: string, password: string): Promise<User> => {
     const data = await apiPost<AuthResponse>("/api/auth/register", { email, password });
     _onAuthSuccess(data);
-    return data.user;
+    try {
+      const photoURL = await generateAvatar();
+      const updated = await apiPut<User>("/api/me", { photoURL });
+      setUser((u) => u ? { ...u, ...updated } : u);
+      return updated;
+    } catch {
+      return data.user;
+    }
   }, [_onAuthSuccess]);
 
   const signOut = useCallback(() => {
@@ -89,8 +99,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return updated;
   }, []);
 
+  const regenerateAvatar = useCallback(async (): Promise<void> => {
+    const photoURL = await generateAvatar();
+    const updated = await apiPut<User>("/api/me", { photoURL });
+    setUser((u) => u ? { ...u, ...updated } : u);
+  }, []);
+
   return (
-    <AuthContext.Provider value={{ user, loading, loginEmail, registerEmail, signOut, updateProfile, setUser }}>
+    <AuthContext.Provider value={{ user, loading, loginEmail, registerEmail, signOut, updateProfile, regenerateAvatar, setUser }}>
       {children}
     </AuthContext.Provider>
   );
