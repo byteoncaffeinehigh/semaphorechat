@@ -40,6 +40,7 @@
   align-items: center;
   gap: 8px;
   padding: 10px 12px;
+  padding-top: max(10px, env(safe-area-inset-top));
   background-color: #0d150d;
   border-bottom: 1px solid #1a3a1a;
 }
@@ -96,6 +97,7 @@
 .footer {
   flex-shrink: 0;
   padding: 10px 12px;
+  padding-bottom: max(10px, env(safe-area-inset-bottom));
   border-top: 1px solid #1a3a1a;
   display: flex;
   align-items: center;
