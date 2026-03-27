@@ -29,6 +29,10 @@ type Message struct {
 	ImageURL      *string   `json:"imageURL,omitempty"`
 	AudioURL      *string   `json:"audioURL,omitempty"`
 	AudioDuration *int      `json:"audioDuration,omitempty"`
+	FileData      *string   `json:"fileData,omitempty"`
+	FileName      *string   `json:"fileName,omitempty"`
+	FileType      *string   `json:"fileType,omitempty"`
+	FileSize      *int      `json:"fileSize,omitempty"`
 	IsCommand     bool      `json:"isCommand,omitempty"`
 	IsEncoded     bool      `json:"isEncoded,omitempty"`
 	Timestamp     time.Time `json:"timestamp"`

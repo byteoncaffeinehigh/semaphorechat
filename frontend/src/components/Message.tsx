@@ -92,6 +92,34 @@ function AudioPlayer({ url, fallbackDuration }: AudioPlayerProps) {
   );
 }
 
+function FileAttachment({ data, name, type, size }: { data: string; name: string; type?: string; size?: number }) {
+  const fmtSize = (b: number) => b < 1024 ? `${b} B` : b < 1048576 ? `${(b / 1024).toFixed(1)} KB` : `${(b / 1048576).toFixed(1)} MB`;
+
+  const icon = name.endsWith(".apk") || type?.includes("apk") ? "📦"
+    : type?.includes("pdf") ? "📄"
+    : type?.includes("zip") || type?.includes("rar") ? "🗜"
+    : "📎";
+
+  const handleDownload = () => {
+    const base64 = data.includes(",") ? data : `data:${type || "application/octet-stream"};base64,${data}`;
+    const a = document.createElement("a");
+    a.href = base64;
+    a.download = name;
+    a.click();
+  };
+
+  return (
+    <button className={styles.fileAttachment} onClick={handleDownload} title={`Download ${name}`}>
+      <span className={styles.fileIcon}>{icon}</span>
+      <span className={styles.fileInfo}>
+        <span className={styles.fileName}>{name}</span>
+        {size ? <span className={styles.fileSize}>{fmtSize(size)}</span> : null}
+      </span>
+      <span className={styles.fileDownload}>↓</span>
+    </button>
+  );
+}
+
 export interface MessageData {
   id: string;
   user: string;
@@ -102,6 +130,10 @@ export interface MessageData {
   imageURL?: string;
   audioURL?: string;
   audioDuration?: number;
+  fileData?: string;
+  fileName?: string;
+  fileType?: string;
+  fileSize?: number;
 }
 
 interface MessageProps {
@@ -154,7 +186,9 @@ function Message({ user, message, isRead, isNew, isSelected }: MessageProps) {
   return (
     <div className={styles.container}>
       <p className={bubbleClass} onClick={handleTap}>
-        {message.audioURL ? (
+        {message.fileData ? (
+          <FileAttachment data={message.fileData} name={message.fileName || "file"} type={message.fileType} size={message.fileSize} />
+        ) : message.audioURL ? (
           <AudioPlayer url={message.audioURL} fallbackDuration={message.audioDuration} />
         ) : message.imageURL ? (
           <img className={styles.messageImage} src={message.imageURL} alt="image" />

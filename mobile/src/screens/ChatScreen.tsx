@@ -5,6 +5,8 @@ import {
 } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import * as ImagePicker from 'expo-image-picker';
+import * as DocumentPicker from 'expo-document-picker';
+import * as FileSystem from 'expo-file-system/legacy';
 import { Audio } from 'expo-av';
 import { useAuth } from '../contexts/AuthContext';
 import { useWS, useWSListener } from '../contexts/WSContext';
@@ -264,6 +266,35 @@ export default function ChatScreen({ route, navigation }: Props) {
     setTxCount((c) => c + 1);
   };
 
+  // Send file
+  const sendFile = async () => {
+    const result = await DocumentPicker.getDocumentAsync({ copyToCacheDirectory: true });
+    if (result.canceled || !result.assets?.[0]) return;
+    const asset = result.assets[0];
+    const MAX_SIZE = 25 * 1024 * 1024; // 25 MB
+    if (asset.size && asset.size > MAX_SIZE) {
+      Alert.alert('File too large', 'Maximum file size is 25 MB');
+      return;
+    }
+    setUploading(true);
+    try {
+      const base64 = await FileSystem.readAsStringAsync(asset.uri, { encoding: FileSystem.EncodingType.Base64 });
+      await apiPost(`/api/chats/${chatId}/messages`, {
+        fileData: base64,
+        fileName: asset.name,
+        fileType: asset.mimeType || 'application/octet-stream',
+        fileSize: asset.size,
+      });
+      const senderName = user?.displayName || user?.email?.split('@')[0];
+      apiPost('/api/notify', { recipientEmail, senderName, message: `📎 ${asset.name}` }).catch(() => {});
+      setTxCount((c) => c + 1);
+    } catch {
+      Alert.alert('Error', 'Failed to send file');
+    } finally {
+      setUploading(false);
+    }
+  };
+
   // Voice recording
   const startRecording = async () => {
     const { status } = await Audio.requestPermissionsAsync();
@@ -426,6 +457,12 @@ export default function ChatScreen({ route, navigation }: Props) {
               <>
                 <TouchableOpacity style={styles.iconBtn} onPress={sendPhoto}>
                   <Text style={styles.iconText}>🖼</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.iconBtn} onPress={sendFile} disabled={uploading}>
+                  {uploading
+                    ? <ActivityIndicator color={colors.amber} size="small" />
+                    : <Text style={styles.iconText}>📎</Text>
+                  }
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.iconBtn} onPress={startRecording}>
                   <Text style={styles.iconText}>🎤</Text>

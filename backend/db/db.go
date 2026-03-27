@@ -285,6 +285,7 @@ func (s *Store) GetMessages(ctx context.Context, chatID string, limit, offset in
 	rows, err := s.pool.Query(ctx, `
 		SELECT id, chat_id, sender_email, COALESCE(sender_photo,''),
 		       message, image_data, audio_data, audio_duration,
+		       file_data, file_name, file_type, file_size,
 		       is_command, is_encoded, created_at
 		FROM messages
 		WHERE chat_id = $1
@@ -301,31 +302,30 @@ func (s *Store) SendMessage(ctx context.Context,
 	chatID, senderID, senderEmail, senderPhoto string,
 	message, imageData, audioData *string,
 	audioDuration *int,
+	fileData, fileName, fileType *string,
+	fileSize *int,
 	isCommand, isEncoded bool,
 ) (*models.Message, error) {
 	var m models.Message
-	var msgText, imgData, audData *string
-	var audDur *int
-	msgText = message
-	imgData = imageData
-	audData = audioData
-	audDur = audioDuration
-
 	err := s.pool.QueryRow(ctx, `
 		INSERT INTO messages
 		  (chat_id, sender_id, sender_email, sender_photo,
 		   message, image_data, audio_data, audio_duration,
+		   file_data, file_name, file_type, file_size,
 		   is_command, is_encoded)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
 		RETURNING id, chat_id, sender_email, COALESCE(sender_photo,''),
 		          message, image_data, audio_data, audio_duration,
+		          file_data, file_name, file_type, file_size,
 		          is_command, is_encoded, created_at`,
 		chatID, senderID, senderEmail, nullStr(senderPhoto),
-		msgText, imgData, audData, audDur,
+		message, imageData, audioData, audioDuration,
+		fileData, fileName, fileType, fileSize,
 		isCommand, isEncoded,
 	).Scan(
 		&m.ID, &m.ChatID, &m.User, &m.PhotoURL,
 		&m.Message, &m.ImageURL, &m.AudioURL, &m.AudioDuration,
+		&m.FileData, &m.FileName, &m.FileType, &m.FileSize,
 		&m.IsCommand, &m.IsEncoded, &m.Timestamp,
 	)
 	return &m, err
@@ -338,6 +338,7 @@ func (s *Store) scanMessages(rows pgx.Rows) ([]models.Message, error) {
 		if err := rows.Scan(
 			&m.ID, &m.ChatID, &m.User, &m.PhotoURL,
 			&m.Message, &m.ImageURL, &m.AudioURL, &m.AudioDuration,
+			&m.FileData, &m.FileName, &m.FileType, &m.FileSize,
 			&m.IsCommand, &m.IsEncoded, &m.Timestamp,
 		); err != nil {
 			return nil, err

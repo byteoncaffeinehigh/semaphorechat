@@ -57,6 +57,10 @@ func (h *MessageHandler) Send(c *gin.Context) {
 		ImageURL      *string `json:"imageURL"`
 		AudioURL      *string `json:"audioURL"`
 		AudioDuration *int    `json:"audioDuration"`
+		FileData      *string `json:"fileData"`
+		FileName      *string `json:"fileName"`
+		FileType      *string `json:"fileType"`
+		FileSize      *int    `json:"fileSize"`
 		IsCommand     bool    `json:"isCommand"`
 		IsEncoded     bool    `json:"isEncoded"`
 	}
@@ -78,6 +82,7 @@ func (h *MessageHandler) Send(c *gin.Context) {
 	msg, err := h.store.SendMessage(c,
 		chatID, userID, user.Email, photoURL,
 		body.Message, body.ImageURL, body.AudioURL, body.AudioDuration,
+		body.FileData, body.FileName, body.FileType, body.FileSize,
 		body.IsCommand, body.IsEncoded,
 	)
 	if err != nil {

@@ -4,6 +4,8 @@ import {
   Animated, Alert,
 } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
+import * as FileSystem from 'expo-file-system/legacy';
+import * as Sharing from 'expo-sharing';
 import { Audio } from 'expo-av';
 import { colors, fonts, fontSize } from '../theme';
 
@@ -23,6 +25,10 @@ export interface MessageData {
   imageURL?: string;
   audioURL?: string;
   audioDuration?: number;
+  fileData?: string;
+  fileName?: string;
+  fileType?: string;
+  fileSize?: number;
 }
 
 interface Props {
@@ -30,6 +36,53 @@ interface Props {
   isMine: boolean;
   isRead?: boolean;
   isNew?: boolean;
+}
+
+function FileAttachment({ data, name, type, size }: { data: string; name: string; type?: string; size?: number }) {
+  const [saving, setSaving] = useState(false);
+
+  const fmtSize = (bytes?: number) => {
+    if (!bytes) return '';
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
+
+  const handleOpen = async () => {
+    setSaving(true);
+    try {
+      const base64 = data.includes(',') ? data.split(',')[1] : data;
+      const uri = FileSystem.cacheDirectory + name;
+      await FileSystem.writeAsStringAsync(uri, base64, { encoding: FileSystem.EncodingType.Base64 });
+      const canShare = await Sharing.isAvailableAsync();
+      if (canShare) {
+        await Sharing.shareAsync(uri, { mimeType: type || 'application/octet-stream', dialogTitle: name });
+      } else {
+        Alert.alert('Sharing not available on this device');
+      }
+    } catch (e) {
+      Alert.alert('Error', 'Failed to open file');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const icon = type?.includes('apk') || name.endsWith('.apk') ? '📦'
+    : type?.includes('pdf') ? '📄'
+    : type?.includes('zip') || type?.includes('rar') ? '🗜'
+    : type?.includes('image') ? '🖼'
+    : '📎';
+
+  return (
+    <TouchableOpacity onPress={handleOpen} disabled={saving} style={fileStyles.container}>
+      <Text style={fileStyles.icon}>{icon}</Text>
+      <View style={fileStyles.info}>
+        <Text style={fileStyles.name} numberOfLines={2}>{name}</Text>
+        {size ? <Text style={fileStyles.size}>{fmtSize(size)}</Text> : null}
+      </View>
+      <Text style={fileStyles.action}>{saving ? '...' : '↓'}</Text>
+    </TouchableOpacity>
+  );
 }
 
 function AudioPlayer({ url, duration }: { url: string; duration?: number }) {
@@ -144,7 +197,14 @@ export default function Message({ message, isMine, isRead, isNew }: Props) {
           message.isCommand && styles.commandBubble,
         ]}
       >
-        {message.audioURL ? (
+        {message.fileData ? (
+          <FileAttachment
+            data={message.fileData}
+            name={message.fileName || 'file'}
+            type={message.fileType}
+            size={message.fileSize}
+          />
+        ) : message.audioURL ? (
           <AudioPlayer url={message.audioURL} duration={message.audioDuration} />
         ) : message.imageURL ? (
           <Image
@@ -223,6 +283,27 @@ const mdStyles = StyleSheet.create({
     backgroundColor: 'rgba(255,184,0,0.12)',
     color: colors.green,
     paddingHorizontal: 3,
+  },
+});
+
+const fileStyles = StyleSheet.create({
+  container: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    minWidth: 180,
+    maxWidth: 260,
+    paddingVertical: 4,
+  },
+  icon: { fontSize: 28 },
+  info: { flex: 1 },
+  name: { fontFamily: fonts.mono, fontSize: fontSize.sm, color: colors.amber },
+  size: { fontFamily: fonts.mono, fontSize: fontSize.xs, color: colors.muted, marginTop: 2 },
+  action: {
+    fontFamily: fonts.mono,
+    fontSize: fontSize.lg,
+    color: colors.green,
+    paddingHorizontal: 4,
   },
 });
 

@@ -12,6 +12,7 @@ import MicIcon from "@mui/icons-material/Mic";
 import StopIcon from "@mui/icons-material/Stop";
 import CloseIcon from "@mui/icons-material/Close";
 import AddPhotoAlternateIcon from "@mui/icons-material/AddPhotoAlternate";
+import AttachFileIcon from "@mui/icons-material/AttachFile";
 import Message, { type MessageData } from "../components/Message";
 import Loading from "../components/Loading";
 import ConnectionStats from "../components/ConnectionStats";
@@ -180,6 +181,7 @@ function ChatScreen({ chat }: { chat: Chat }) {
   const audioMimeTypeRef = useRef("");
   const recTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const fileAttachRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     setIsMobile(window.matchMedia("(pointer: coarse)").matches);
@@ -395,6 +397,35 @@ function ChatScreen({ chat }: { chat: Chat }) {
     img.src = url;
   });
 
+  const sendFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = "";
+    const MAX_SIZE = 25 * 1024 * 1024;
+    if (file.size > MAX_SIZE) { alert("File too large (max 25 MB)"); return; }
+    setUploading(true);
+    try {
+      const base64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          const result = reader.result as string;
+          resolve(result.split(",")[1]);
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+      await apiPost(`/api/chats/${chatId}/messages`, {
+        fileData: base64,
+        fileName: file.name,
+        fileType: file.type || "application/octet-stream",
+        fileSize: file.size,
+      });
+      const senderName = user?.displayName || user?.email?.split("@")[0];
+      apiPost("/api/notify", { recipientEmail, senderName, message: `📎 ${file.name}` }).catch(() => {});
+    } catch {}
+    setUploading(false);
+  };
+
   const sendPhoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -608,6 +639,13 @@ function ChatScreen({ chat }: { chat: Chat }) {
                   <AddPhotoAlternateIcon fontSize="small" />
                 </IconButton>
                 <IconButton
+                  onClick={() => fileAttachRef.current?.click()}
+                  disabled={uploading}
+                  style={{ color: "#00ff41", padding: "6px", flexShrink: 0 }}
+                >
+                  <AttachFileIcon fontSize="small" />
+                </IconButton>
+                <IconButton
                   onClick={startRecording}
                   style={{ color: "#00ff41", padding: "6px", flexShrink: 0 }}
                 >
@@ -621,6 +659,12 @@ function ChatScreen({ chat }: { chat: Chat }) {
               accept="image/*"
               style={{ display: "none" }}
               onChange={sendPhoto}
+            />
+            <input
+              ref={fileAttachRef}
+              type="file"
+              style={{ display: "none" }}
+              onChange={sendFile}
             />
           </>
         )}
