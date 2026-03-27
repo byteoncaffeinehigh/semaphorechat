@@ -46,14 +46,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     fetch(`${API_BASE}/api/auth/refresh`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "1" },
       body: JSON.stringify({ refreshToken: rt }),
     })
       .then((r) => (r.ok ? r.json() : Promise.reject()))
       .then(async (data: { accessToken: string }) => {
         setTokens(data.accessToken);
         const me: User = await fetch(`${API_BASE}/api/me`, {
-          headers: { Authorization: `Bearer ${data.accessToken}` },
+          headers: { Authorization: `Bearer ${data.accessToken}`, "ngrok-skip-browser-warning": "1" },
         }).then((r) => r.json());
         setUser(me);
       })
