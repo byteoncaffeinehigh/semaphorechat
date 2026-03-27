@@ -21,3 +21,6 @@ mobile/ios/
 # OS
 .DS_Store
 Thumbs.db
+
+# Migration secrets
+migrate/serviceAccount.json
