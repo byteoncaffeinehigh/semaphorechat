@@ -41,7 +41,7 @@ async function refreshAccessToken(): Promise<string> {
   if (!rt) throw new Error("no refresh token");
   const res = await fetch(`${BASE}/api/auth/refresh`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "1" },
     body: JSON.stringify({ refreshToken: rt }),
   });
   if (!res.ok) throw new Error("refresh failed");
@@ -69,6 +69,7 @@ export async function apiFetch<T = unknown>(path: string, options: RequestInit =
       ...options,
       headers: {
         "Content-Type": "application/json",
+        "ngrok-skip-browser-warning": "1",
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
         ...(options.headers as Record<string, string> || {}),
       },
