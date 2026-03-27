@@ -57,6 +57,7 @@ func main() {
 	r.POST("/api/auth/register", authH.Register)
 	r.POST("/api/auth/login", authH.Login)
 	r.POST("/api/auth/refresh", authH.Refresh)
+	r.POST("/api/auth/google", authH.Google)
 
 	// WebSocket (authenticates via ?token= query param)
 	wsH := handlers.NewWSHandler(store, hub, cfg.JWTSecret)

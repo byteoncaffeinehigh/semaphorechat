@@ -6,14 +6,15 @@ import (
 )
 
 type Config struct {
-	DatabaseURL     string
-	JWTSecret       string
+	DatabaseURL      string
+	JWTSecret        string
 	JWTRefreshSecret string
-	Port            string
-	FrontendURL     string
-	VAPIDPublicKey  string
-	VAPIDPrivateKey string
-	VAPIDEmail      string
+	Port             string
+	FrontendURL      string
+	VAPIDPublicKey   string
+	VAPIDPrivateKey  string
+	VAPIDEmail       string
+	GoogleClientID   string
 }
 
 func Load() *Config {
@@ -26,6 +27,7 @@ func Load() *Config {
 		VAPIDPublicKey:   getEnv("VAPID_PUBLIC_KEY", ""),
 		VAPIDPrivateKey:  getEnv("VAPID_PRIVATE_KEY", ""),
 		VAPIDEmail:       getEnv("VAPID_EMAIL", "mailto:admin@example.com"),
+		GoogleClientID:   getEnv("GOOGLE_CLIENT_ID", ""),
 	}
 	return cfg
 }

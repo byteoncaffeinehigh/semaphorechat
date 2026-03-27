@@ -1,13 +1,43 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "../utils/AuthContext";
 import styles from "./Login.module.css";
 
+const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined;
+
 function Login() {
-  const { loginEmail, registerEmail } = useAuth();
+  const { loginEmail, registerEmail, loginGoogle } = useAuth();
   const [mode, setMode] = useState<"main" | "signin" | "signup">("main");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!GOOGLE_CLIENT_ID) return;
+    const script = document.createElement("script");
+    script.src = "https://accounts.google.com/gsi/client";
+    script.async = true;
+    script.defer = true;
+    document.head.appendChild(script);
+    return () => { document.head.removeChild(script); };
+  }, []);
+
+  const signInGoogle = () => {
+    if (!(window as any).google || !GOOGLE_CLIENT_ID) {
+      setError("Google Sign-In is not configured");
+      return;
+    }
+    (window as any).google.accounts.id.initialize({
+      client_id: GOOGLE_CLIENT_ID,
+      callback: async ({ credential }: { credential: string }) => {
+        try {
+          await loginGoogle(credential);
+        } catch {
+          setError("Google sign-in failed");
+        }
+      },
+    });
+    (window as any).google.accounts.id.prompt();
+  };
 
   const getErrorMessage = (err: unknown): string => {
     const msg = (err as Error)?.message || "";
@@ -48,6 +78,12 @@ function Login() {
 
         {mode === "main" && (
           <>
+            {GOOGLE_CLIENT_ID && (
+              <>
+                <button className={styles.button} onClick={signInGoogle}>Sign in with Google</button>
+                <div className={styles.divider}>or</div>
+              </>
+            )}
             <button className={styles.button} onClick={() => setMode("signin")}>Sign in with Email</button>
             <button className={styles.textButton} onClick={() => setMode("signup")}>No account? Sign up</button>
           </>
