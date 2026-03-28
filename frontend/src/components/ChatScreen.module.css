@@ -148,3 +148,50 @@
   color: #ff4141;
   animation: pulse 0.6s ease-in-out infinite alternate;
 }
+
+.incomingCallBanner {
+  position: fixed;
+  top: 60px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #0a0a0a;
+  border: 1px solid #00ff41;
+  padding: 12px 20px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-family: 'Share Tech Mono', 'Courier New', monospace;
+  font-size: 14px;
+  color: #00ff41;
+  z-index: 1000;
+  box-shadow: 0 0 20px rgba(0, 255, 65, 0.3);
+  animation: pulse 1s ease-in-out infinite alternate;
+}
+
+.acceptBtn {
+  background: transparent;
+  border: 1px solid #00ff41;
+  color: #00ff41;
+  font-family: 'Share Tech Mono', 'Courier New', monospace;
+  font-size: 13px;
+  padding: 4px 12px;
+  cursor: pointer;
+}
+
+.acceptBtn:hover {
+  background: rgba(0, 255, 65, 0.15);
+}
+
+.declineBtn {
+  background: transparent;
+  border: 1px solid #ff4141;
+  color: #ff4141;
+  font-family: 'Share Tech Mono', 'Courier New', monospace;
+  font-size: 13px;
+  padding: 4px 12px;
+  cursor: pointer;
+}
+
+.declineBtn:hover {
+  background: rgba(255, 65, 65, 0.15);
+}

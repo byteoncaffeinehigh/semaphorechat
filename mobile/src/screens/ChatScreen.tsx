@@ -124,6 +124,15 @@ export default function ChatScreen({ route, navigation }: Props) {
   const [recipientInfo, setRecipientInfo] = useState<RecipientInfo | null>(null);
   const [recipientTyping, setRecipientTyping] = useState<TypingData | null>(null);
 
+  const [incomingCall, setIncomingCall] = useState(false);
+
+  useWSListener('call_update', (data) => {
+    const d = data as { chatId: string; call: { status?: string } };
+    if (d.chatId !== chatId) return;
+    if (d.call.status === 'calling') setIncomingCall(true);
+    if (d.call.status === 'ended' || d.call.status === 'declined') setIncomingCall(false);
+  }, [chatId]);
+
   const [recording, setRecording] = useState(false);
   const [recSeconds, setRecSeconds] = useState(0);
   const [uploading, setUploading] = useState(false);
@@ -383,6 +392,34 @@ export default function ChatScreen({ route, navigation }: Props) {
         </View>
       </View>
 
+      {/* Incoming call banner */}
+      {incomingCall && (
+        <View style={styles.incomingCallBanner}>
+          <Text style={styles.incomingCallText}>📞 INCOMING CALL from {displayName}</Text>
+          <View style={styles.incomingCallBtns}>
+            <TouchableOpacity
+              style={styles.acceptBtn}
+              onPress={() => {
+                setIncomingCall(false);
+                Alert.alert('Call', 'Video calls are not supported on mobile yet.');
+                apiPut(`/api/calls/${chatId}`, { status: 'declined' }).catch(() => {});
+              }}
+            >
+              <Text style={styles.acceptBtnText}>ACCEPT</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.declineBtn}
+              onPress={() => {
+                setIncomingCall(false);
+                apiPut(`/api/calls/${chatId}`, { status: 'declined' }).catch(() => {});
+              }}
+            >
+              <Text style={styles.declineBtnText}>DECLINE</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
+
       {/* Messages */}
       {loadingMsgs ? (
         <ActivityIndicator color={colors.amber} style={{ flex: 1 }} />
@@ -559,6 +596,42 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   iconText: { fontSize: fontSize.md },
+  // Incoming call
+  incomingCallBanner: {
+    backgroundColor: colors.bgElevated,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.green,
+    padding: 12,
+    gap: 8,
+  },
+  incomingCallText: {
+    fontFamily: fonts.mono,
+    fontSize: fontSize.sm,
+    color: colors.green,
+  },
+  incomingCallBtns: { flexDirection: 'row', gap: 10 },
+  acceptBtn: {
+    borderWidth: 1,
+    borderColor: colors.green,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+  },
+  acceptBtnText: {
+    fontFamily: fonts.mono,
+    fontSize: fontSize.sm,
+    color: colors.green,
+  },
+  declineBtn: {
+    borderWidth: 1,
+    borderColor: colors.red,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+  },
+  declineBtnText: {
+    fontFamily: fonts.mono,
+    fontSize: fontSize.sm,
+    color: colors.red,
+  },
   // Recording
   recordRow: {
     flexDirection: 'row',

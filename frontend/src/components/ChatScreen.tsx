@@ -172,6 +172,7 @@ function ChatScreen({ chat }: { chat: Chat }) {
   const [isMobile, setIsMobile] = useState(false);
   const [showCall, setShowCall] = useState(callParam === "callee");
   const [callMode, setCallMode] = useState<"caller" | "callee" | null>(callParam === "callee" ? "callee" : null);
+  const [incomingCall, setIncomingCall] = useState(false);
 
   const [recording, setRecording] = useState(false);
   const [recSeconds, setRecSeconds] = useState(0);
@@ -239,10 +240,10 @@ function ChatScreen({ chat }: { chat: Chat }) {
     const d = data as { chatId: string; call: { status?: string } };
     if (d.chatId !== chatId) return;
     if (d.call.status === "calling" && !showCall) {
-      setCallMode("callee");
-      setShowCall(true);
+      setIncomingCall(true);
     }
-    if ((d.call.status === "ended" || d.call.status === "declined") && showCall) {
+    if ((d.call.status === "ended" || d.call.status === "declined")) {
+      setIncomingCall(false);
       setShowCall(false);
       setCallMode(null);
     }
@@ -682,6 +683,27 @@ function ChatScreen({ chat }: { chat: Chat }) {
           </>
         )}
       </form>
+
+      {incomingCall && !showCall && (
+        <div className={styles.incomingCallBanner}>
+          <span>📞 INCOMING CALL from {displayName || recipientEmail}</span>
+          <button
+            className={styles.acceptBtn}
+            onClick={() => { setIncomingCall(false); setCallMode("callee"); setShowCall(true); }}
+          >
+            ACCEPT
+          </button>
+          <button
+            className={styles.declineBtn}
+            onClick={() => {
+              setIncomingCall(false);
+              apiPut(`/api/calls/${chatId}`, { status: "declined" }).catch(() => {});
+            }}
+          >
+            DECLINE
+          </button>
+        </div>
+      )}
 
       {showCall && (
         <CallModal
