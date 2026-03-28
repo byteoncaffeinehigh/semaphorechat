@@ -16,8 +16,17 @@
       "package": "com.semaphorechat",
       "permissions": [
         "android.permission.RECORD_AUDIO",
-        "android.permission.MODIFY_AUDIO_SETTINGS"
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.CAMERA"
       ]
+    },
+    "ios": {
+      "bundleIdentifier": "com.semaphorechat",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSCameraUsageDescription": "Semaphore needs camera access for video calls.",
+        "NSMicrophoneUsageDescription": "Semaphore needs microphone access for calls and voice messages."
+      }
     },
     "plugins": [
       [
@@ -29,7 +38,7 @@
       [
         "expo-av",
         {
-          "microphonePermission": "Semaphore needs access to your microphone to record voice messages."
+          "microphonePermission": "Semaphore needs access to your microphone for calls and voice messages."
         }
       ],
       "expo-document-picker"
@@ -39,6 +48,6 @@
       "eas": {
         "projectId": "600dd04d-5574-460d-acd7-22541e12ffc1"
       }
-    }
+    },
   }
 }

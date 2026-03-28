@@ -1,8 +1,9 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   View, Text, FlatList, TextInput, TouchableOpacity, StyleSheet,
-  KeyboardAvoidingView, Platform, Alert, ActivityIndicator, Image,
+  KeyboardAvoidingView, Platform, Alert, ActivityIndicator,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
@@ -13,11 +14,11 @@ import { useAuth } from '../contexts/AuthContext';
 import { useWS, useWSListener } from '../contexts/WSContext';
 import { apiGet, apiPost, apiPut } from '../api';
 import Message, { MessageData } from '../components/Message';
-import ConnectionStats from '../components/ConnectionStats';
-import { colors, fonts, fontSize } from '../theme';
+import CallModal from '../components/CallModal';
+import { colors, fontSize } from '../theme';
 import { RootStackParamList } from '../navigation/AppNavigator';
 
-// ─── Slash command helpers ───────────────────────────────────────────────────
+// ─── Slash commands ───────────────────────────────────────────────────────────
 
 const rot13 = (s: string): string =>
   s.replace(/[a-zA-Z]/g, (c) => {
@@ -36,74 +37,22 @@ const safeCalc = (expr: string): number | null => {
   } catch { return null; }
 };
 
-const CITY_TZ: Record<string, string> = {
-  moscow: 'Europe/Moscow', london: 'Europe/London',
-  'new york': 'America/New_York', nyc: 'America/New_York',
-  tokyo: 'Asia/Tokyo', berlin: 'Europe/Berlin', paris: 'Europe/Paris',
-  dubai: 'Asia/Dubai', beijing: 'Asia/Shanghai', shanghai: 'Asia/Shanghai',
-  sydney: 'Australia/Sydney', la: 'America/Los_Angeles',
-  'los angeles': 'America/Los_Angeles', chicago: 'America/Chicago',
-  toronto: 'America/Toronto', istanbul: 'Europe/Istanbul',
-  seoul: 'Asia/Seoul', singapore: 'Asia/Singapore', utc: 'UTC',
-};
-
 function handleSlashCommand(cmd: string): { message: string; isEncoded?: boolean } | null {
   const parts = cmd.trim().slice(1).split(/\s+/);
   const command = parts[0].toLowerCase();
   const rest = parts.slice(1).join(' ');
-  const faces = ['⠀', '⚁', '⚂', '⚃', '⚄', '⚅', '⚅'];
-
-  if (command === 'roll') {
-    const n = Math.floor(Math.random() * 6) + 1;
-    return { message: `🎲 /roll → ${n} ${faces[n]}` };
-  }
-  if (command === 'flip') return { message: `🪙 /flip → ${Math.random() < 0.5 ? 'HEADS' : 'TAILS'}` };
-  if (command === 'ping') {
-    const ms = Math.floor(Math.random() * 25) + 4;
-    return { message: `◈ PING → ACK [${ms}ms] TTL=64` };
-  }
-  if (command === 'time') {
-    const tz = CITY_TZ[rest.toLowerCase() || 'utc'];
-    if (!tz) return { message: `⚠ /time: unknown city "${rest || '?'}"` };
-    const time = new Date().toLocaleTimeString('en-GB', { timeZone: tz, hour12: false });
-    return { message: `⌚ /time ${rest || 'UTC'} → ${time}` };
-  }
-  if (command === 'encode') {
-    if (!rest) return { message: '⚠ /encode: usage: /encode <text>' };
-    return { message: rot13(rest), isEncoded: true };
-  }
-  if (command === 'calc') {
-    if (!rest) return { message: '⚠ /calc: usage: /calc <expression>' };
-    const result = safeCalc(rest);
-    if (result === null) return { message: `⚠ /calc: invalid expression "${rest}"` };
-    return { message: `🖩 ${rest} = ${result}` };
-  }
-  if (command === 'love') return { message: '❤' };
+  if (command === 'roll') { const n = Math.floor(Math.random() * 6) + 1; return { message: `🎲 Roll: ${n}` }; }
+  if (command === 'flip') return { message: `🪙 Flip: ${Math.random() < 0.5 ? 'Heads' : 'Tails'}` };
+  if (command === 'encode') { if (!rest) return null; return { message: rot13(rest), isEncoded: true }; }
+  if (command === 'calc') { if (!rest) return null; const r = safeCalc(rest); return r !== null ? { message: `${rest} = ${r}` } : null; }
   return null;
 }
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
-interface TypingData {
-  chatId: string;
-  userEmail: string;
-  wpm: number;
-  active: boolean;
-  ts: number;
-}
-
-interface PresenceData {
-  userEmail: string;
-  isOnline: boolean;
-  lastSeen?: string;
-}
-
-interface RecipientInfo {
-  email?: string;
-  displayName?: string;
-  isOnline?: boolean;
-  lastSeen?: string;
-}
+interface TypingData { chatId: string; userEmail: string; wpm: number; active: boolean; ts: number; }
+interface PresenceData { userEmail: string; isOnline: boolean; lastSeen?: string; }
+interface RecipientInfo { email?: string; displayName?: string; isOnline?: boolean; lastSeen?: string; }
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Chat'>;
 
@@ -113,25 +62,16 @@ export default function ChatScreen({ route, navigation }: Props) {
   const { chatId, recipientEmail, recipientName } = route.params;
   const { user } = useAuth();
   const { send: wsSend } = useWS();
+  const insets = useSafeAreaInsets();
 
   const [messages, setMessages] = useState<MessageData[]>([]);
   const [loadingMsgs, setLoadingMsgs] = useState(true);
   const [input, setInput] = useState('');
-  const [mode, setMode] = useState<'normal' | 'insert'>('insert');
   const [txCount, setTxCount] = useState(0);
   const [newMsgIds, setNewMsgIds] = useState(new Set<string>());
   const [recipientLastRead, setRecipientLastRead] = useState(0);
   const [recipientInfo, setRecipientInfo] = useState<RecipientInfo | null>(null);
   const [recipientTyping, setRecipientTyping] = useState<TypingData | null>(null);
-
-  const [incomingCall, setIncomingCall] = useState(false);
-
-  useWSListener('call_update', (data) => {
-    const d = data as { chatId: string; call: { status?: string } };
-    if (d.chatId !== chatId) return;
-    if (d.call.status === 'calling') setIncomingCall(true);
-    if (d.call.status === 'ended' || d.call.status === 'declined') setIncomingCall(false);
-  }, [chatId]);
 
   const [recording, setRecording] = useState(false);
   const [recSeconds, setRecSeconds] = useState(0);
@@ -139,14 +79,15 @@ export default function ChatScreen({ route, navigation }: Props) {
   const recRef = useRef<Audio.Recording | null>(null);
   const recTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const uptimeStart = useRef(Date.now()).current;
+  const [showCall, setShowCall] = useState(false);
+  const [callMode, setCallMode] = useState<'caller' | 'callee' | null>(null);
+  const [incomingCall, setIncomingCall] = useState(false);
+
   const keystrokeTimes = useRef<number[]>([]);
   const typingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastTypingSent = useRef(0);
   const flatListRef = useRef<FlatList>(null);
-  const inputRef = useRef<TextInput>(null);
 
-  // Load messages + recipient info
   useEffect(() => {
     Promise.all([
       apiGet<MessageData[]>(`/api/chats/${chatId}/messages`),
@@ -155,15 +96,10 @@ export default function ChatScreen({ route, navigation }: Props) {
       setMessages(msgs || []);
       if (rec) setRecipientInfo(rec);
     }).catch(() => {}).finally(() => setLoadingMsgs(false));
-
     apiPut(`/api/chats/${chatId}/read`, {}).catch(() => {});
-
-    return () => {
-      wsSend('typing', { chatId, wpm: 0, active: false });
-    };
+    return () => { wsSend('typing', { chatId, wpm: 0, active: false }); };
   }, [chatId]);
 
-  // WebSocket listeners
   useWSListener('new_message', (data) => {
     const d = data as { chatId: string; message: MessageData };
     if (d.chatId !== chatId) return;
@@ -171,10 +107,7 @@ export default function ChatScreen({ route, navigation }: Props) {
       if (prev.find((m) => m.id === d.message.id)) return prev;
       return [...prev, d.message];
     });
-    if (d.message.user !== user?.email) {
-      apiPut(`/api/chats/${chatId}/read`, {}).catch(() => {});
-    }
-    // highlight new message
+    if (d.message.user !== user?.email) apiPut(`/api/chats/${chatId}/read`, {}).catch(() => {});
     setNewMsgIds((prev) => {
       const next = new Set(prev);
       next.add(d.message.id);
@@ -202,25 +135,29 @@ export default function ChatScreen({ route, navigation }: Props) {
     if (lr) setRecipientLastRead(new Date(lr).getTime());
   }, [chatId, recipientEmail]);
 
-  // Scroll to bottom when new messages arrive
+  useWSListener('call_update', (data) => {
+    const d = data as { chatId: string; call: { status?: string } };
+    if (d.chatId !== chatId) return;
+    if (d.call.status === 'calling' && !showCall) setIncomingCall(true);
+    if (d.call.status === 'ended' || d.call.status === 'declined') {
+      setIncomingCall(false);
+      setShowCall(false);
+      setCallMode(null);
+    }
+  }, [chatId, showCall]);
+
   useEffect(() => {
     if (messages.length > 0) {
       setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
     }
   }, [messages.length]);
 
-  // Typing WS
   const sendTypingWS = useCallback(() => {
     const now = Date.now();
     if (now - lastTypingSent.current < 1200) return;
     lastTypingSent.current = now;
     const recent = keystrokeTimes.current.filter((t) => now - t < 10000);
-    const wpm = Math.round((recent.length / 5) * 6);
-    wsSend('typing', { chatId, wpm, active: true });
-  }, [chatId, wsSend]);
-
-  const clearTypingWS = useCallback(() => {
-    wsSend('typing', { chatId, wpm: 0, active: false });
+    wsSend('typing', { chatId, wpm: Math.round((recent.length / 5) * 6), active: true });
   }, [chatId, wsSend]);
 
   const handleInputChange = (text: string) => {
@@ -230,25 +167,18 @@ export default function ChatScreen({ route, navigation }: Props) {
     keystrokeTimes.current = keystrokeTimes.current.filter((t) => now - t < 30000);
     sendTypingWS();
     if (typingTimer.current) clearTimeout(typingTimer.current);
-    typingTimer.current = setTimeout(clearTypingWS, 2500);
+    typingTimer.current = setTimeout(() => wsSend('typing', { chatId, wpm: 0, active: false }), 2500);
   };
 
-  // Send text message
   const sendMessage = () => {
     if (!input.trim()) return;
     let messageText = input.trim();
     let isCommand = false;
     let isEncoded = false;
-
     if (messageText.startsWith('/')) {
       const result = handleSlashCommand(messageText);
-      if (result) {
-        messageText = result.message;
-        isCommand = true;
-        isEncoded = result.isEncoded || false;
-      }
+      if (result) { messageText = result.message; isCommand = true; isEncoded = result.isEncoded || false; }
     }
-
     apiPost(`/api/chats/${chatId}/messages`, { message: messageText, isCommand, isEncoded }).catch(() => {});
     if (!isCommand) {
       const senderName = user?.displayName || user?.email?.split('@')[0];
@@ -258,64 +188,39 @@ export default function ChatScreen({ route, navigation }: Props) {
     setInput('');
   };
 
-  // Send photo
   const sendPhoto = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') { Alert.alert('Permission denied'); return; }
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      quality: 0.7,
-      base64: true,
-    });
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: 'images', quality: 0.7, base64: true });
     if (result.canceled || !result.assets[0]) return;
-    const asset = result.assets[0];
-    const imageURL = `data:image/jpeg;base64,${asset.base64}`;
+    const imageURL = `data:image/jpeg;base64,${result.assets[0].base64}`;
     apiPost(`/api/chats/${chatId}/messages`, { imageURL }).catch(() => {});
     const senderName = user?.displayName || user?.email?.split('@')[0];
     apiPost('/api/notify', { recipientEmail, senderName, message: '🖼 Photo' }).catch(() => {});
-    setTxCount((c) => c + 1);
   };
 
-  // Send file
   const sendFile = async () => {
     const result = await DocumentPicker.getDocumentAsync({ copyToCacheDirectory: true });
     if (result.canceled || !result.assets?.[0]) return;
     const asset = result.assets[0];
-    const MAX_SIZE = 25 * 1024 * 1024; // 25 MB
-    if (asset.size && asset.size > MAX_SIZE) {
-      Alert.alert('File too large', 'Maximum file size is 25 MB');
-      return;
-    }
+    if (asset.size && asset.size > 25 * 1024 * 1024) { Alert.alert('Too large', 'Max 25 MB'); return; }
     setUploading(true);
     try {
       const base64 = await FileSystem.readAsStringAsync(asset.uri, { encoding: FileSystem.EncodingType.Base64 });
-      await apiPost(`/api/chats/${chatId}/messages`, {
-        fileData: base64,
-        fileName: asset.name,
-        fileType: asset.mimeType || 'application/octet-stream',
-        fileSize: asset.size,
-      });
+      await apiPost(`/api/chats/${chatId}/messages`, { fileData: base64, fileName: asset.name, fileType: asset.mimeType || 'application/octet-stream', fileSize: asset.size });
       const senderName = user?.displayName || user?.email?.split('@')[0];
       apiPost('/api/notify', { recipientEmail, senderName, message: `📎 ${asset.name}` }).catch(() => {});
-      setTxCount((c) => c + 1);
-    } catch {
-      Alert.alert('Error', 'Failed to send file');
-    } finally {
-      setUploading(false);
-    }
+    } catch { Alert.alert('Error', 'Failed to send file'); }
+    setUploading(false);
   };
 
-  // Voice recording
   const startRecording = async () => {
     const { status } = await Audio.requestPermissionsAsync();
     if (status !== 'granted') { Alert.alert('Permission denied'); return; }
     await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
-    const { recording } = await Audio.Recording.createAsync(
-      Audio.RecordingOptionsPresets.HIGH_QUALITY
-    );
+    const { recording } = await Audio.Recording.createAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
     recRef.current = recording;
-    setRecording(true);
-    setRecSeconds(0);
+    setRecording(true); setRecSeconds(0);
     recTimerRef.current = setInterval(() => setRecSeconds((s) => s + 1), 1000);
   };
 
@@ -323,8 +228,8 @@ export default function ChatScreen({ route, navigation }: Props) {
     if (recTimerRef.current) clearInterval(recTimerRef.current);
     await recRef.current?.stopAndUnloadAsync().catch(() => {});
     recRef.current = null;
-    setRecording(false);
-    setRecSeconds(0);
+    await Audio.setAudioModeAsync({ allowsRecordingIOS: false, playsInSilentModeIOS: true });
+    setRecording(false); setRecSeconds(0);
   };
 
   const sendVoiceMessage = async () => {
@@ -336,77 +241,76 @@ export default function ChatScreen({ route, navigation }: Props) {
       await recRef.current.stopAndUnloadAsync();
       const uri = recRef.current.getURI();
       recRef.current = null;
+      await Audio.setAudioModeAsync({ allowsRecordingIOS: false, playsInSilentModeIOS: true });
       if (!uri) return;
-      // Read file as base64
       const resp = await fetch(uri);
       const blob = await resp.blob();
       const reader = new FileReader();
       reader.onloadend = () => {
         if (!reader.result) return;
-        apiPost(`/api/chats/${chatId}/messages`, {
-          audioURL: reader.result,
-          audioDuration: duration,
-        }).catch(() => {});
+        apiPost(`/api/chats/${chatId}/messages`, { audioURL: reader.result, audioDuration: duration }).catch(() => {});
         const senderName = user?.displayName || user?.email?.split('@')[0];
         apiPost('/api/notify', { recipientEmail, senderName, message: '🎤 Voice message' }).catch(() => {});
         setTxCount((c) => c + 1);
       };
       reader.readAsDataURL(blob);
     } catch {}
-    setRecording(false);
-    setRecSeconds(0);
-    setUploading(false);
+    setRecording(false); setRecSeconds(0); setUploading(false);
   };
 
   const isTyping = recipientTyping?.active && recipientTyping.ts && Date.now() - recipientTyping.ts < 4000;
   const fmtRec = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
   const displayName = recipientInfo?.displayName || recipientName;
+  const onlineStatus = recipientInfo?.isOnline ? 'Online'
+    : recipientInfo?.lastSeen ? `Last seen ${new Date(recipientInfo.lastSeen).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+    : '';
 
   return (
     <KeyboardAvoidingView
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
     >
       {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <Text style={styles.backText}>{'←'}</Text>
+      <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+          <Text style={styles.backText}>‹</Text>
         </TouchableOpacity>
-        <View style={styles.avatarWrap}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>{recipientEmail[0]?.toUpperCase()}</Text>
+
+        <View style={styles.headerCenter}>
+          <View style={styles.headerAvatar}>
+            <Text style={styles.headerAvatarText}>{recipientEmail[0]?.toUpperCase()}</Text>
+            {recipientInfo?.isOnline && <View style={styles.headerOnlineDot} />}
           </View>
-          {recipientInfo?.isOnline && <View style={styles.onlineDot} />}
+          <View>
+            <Text style={styles.headerName} numberOfLines={1}>{displayName}</Text>
+            {isTyping ? (
+              <Text style={styles.headerSub}>typing...</Text>
+            ) : onlineStatus ? (
+              <Text style={styles.headerSub}>{onlineStatus}</Text>
+            ) : null}
+          </View>
         </View>
-        <View style={styles.headerInfo}>
-          <Text style={styles.headerName} numberOfLines={1}>{displayName}</Text>
-          <Text style={styles.headerSub} numberOfLines={1}>
-            {isTyping
-              ? `▶ TRANSMITTING${recipientTyping && recipientTyping.wpm > 0 ? ` [${recipientTyping.wpm} WPM]` : '...'}`
-              : recipientInfo?.isOnline ? 'Online'
-              : recipientInfo?.lastSeen ? `Last seen: ${new Date(recipientInfo.lastSeen).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
-              : 'Unavailable'
-            }
-          </Text>
-        </View>
+
+        <TouchableOpacity
+          style={styles.callBtn}
+          onPress={() => { setCallMode('caller'); setShowCall(true); }}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
+          <Text style={styles.callBtnIcon}>📹</Text>
+        </TouchableOpacity>
       </View>
 
       {/* Incoming call banner */}
-      {incomingCall && (
-        <View style={styles.incomingCallBanner}>
-          <Text style={styles.incomingCallText}>📞 INCOMING CALL from {displayName}</Text>
-          <View style={styles.incomingCallBtns}>
-            <TouchableOpacity
-              style={styles.acceptBtn}
-              onPress={() => {
-                setIncomingCall(false);
-                Alert.alert('Call', 'Video calls are not supported on mobile yet.');
-                apiPut(`/api/calls/${chatId}`, { status: 'declined' }).catch(() => {});
-              }}
-            >
-              <Text style={styles.acceptBtnText}>ACCEPT</Text>
-            </TouchableOpacity>
+      {incomingCall && !showCall && (
+        <View style={styles.incomingBanner}>
+          <View style={styles.incomingInfo}>
+            <Text style={styles.incomingIcon}>📞</Text>
+            <View>
+              <Text style={styles.incomingTitle}>Incoming Video Call</Text>
+              <Text style={styles.incomingFrom}>{displayName}</Text>
+            </View>
+          </View>
+          <View style={styles.incomingBtns}>
             <TouchableOpacity
               style={styles.declineBtn}
               onPress={() => {
@@ -414,7 +318,13 @@ export default function ChatScreen({ route, navigation }: Props) {
                 apiPut(`/api/calls/${chatId}`, { status: 'declined' }).catch(() => {});
               }}
             >
-              <Text style={styles.declineBtnText}>DECLINE</Text>
+              <Text style={styles.declineBtnText}>Decline</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.acceptBtn}
+              onPress={() => { setIncomingCall(false); setCallMode('callee'); setShowCall(true); }}
+            >
+              <Text style={styles.acceptBtnText}>Accept</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -422,7 +332,7 @@ export default function ChatScreen({ route, navigation }: Props) {
 
       {/* Messages */}
       {loadingMsgs ? (
-        <ActivityIndicator color={colors.amber} style={{ flex: 1 }} />
+        <ActivityIndicator color={colors.primary} style={{ flex: 1 }} />
       ) : (
         <FlatList
           ref={flatListRef}
@@ -441,230 +351,167 @@ export default function ChatScreen({ route, navigation }: Props) {
             );
           }}
           ListEmptyComponent={
-            <Text style={styles.emptyText}>{'> Channel open. Send a message.'}</Text>
+            <Text style={styles.emptyText}>No messages yet.{'\n'}Say hello 👋</Text>
           }
           onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: false })}
         />
       )}
 
-      {/* Stats bar */}
-      <ConnectionStats
-        mode={mode}
-        msgCount={messages.length}
-        txCount={txCount}
-        uptimeStart={uptimeStart}
-      />
-
-      {/* Input area */}
-      <View style={styles.inputArea}>
+      {/* Input */}
+      <View style={[styles.inputArea, { paddingBottom: insets.bottom + 6 }]}>
         {recording ? (
           <View style={styles.recordRow}>
-            <Text style={styles.recIndicator}>● REC {fmtRec(recSeconds)}</Text>
-            <TouchableOpacity onPress={cancelRecording} style={styles.recBtn}>
-              <Text style={styles.recBtnText}>✕</Text>
+            <View style={styles.recIndicatorWrap}>
+              <View style={styles.recDot} />
+              <Text style={styles.recTimer}>{fmtRec(recSeconds)}</Text>
+            </View>
+            <TouchableOpacity onPress={cancelRecording} style={styles.recCancelBtn}>
+              <Text style={styles.recCancelText}>Cancel</Text>
             </TouchableOpacity>
             <TouchableOpacity onPress={sendVoiceMessage} disabled={uploading} style={styles.recSendBtn}>
-              {uploading
-                ? <ActivityIndicator color={colors.bg} size="small" />
-                : <Text style={styles.recSendText}>■ SEND</Text>
-              }
+              {uploading ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.recSendText}>Send</Text>}
             </TouchableOpacity>
           </View>
         ) : (
           <View style={styles.inputRow}>
+            <TouchableOpacity onPress={sendPhoto} style={styles.attachBtn}>
+              <Text style={styles.attachIcon}>🖼</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={sendFile} disabled={uploading} style={styles.attachBtn}>
+              {uploading ? <ActivityIndicator color={colors.primary} size="small" /> : <Text style={styles.attachIcon}>📎</Text>}
+            </TouchableOpacity>
             <TextInput
-              ref={inputRef}
               style={styles.input}
               value={input}
               onChangeText={handleInputChange}
-              onFocus={() => setMode('insert')}
-              onBlur={() => setMode('normal')}
               multiline
               maxLength={4000}
-              placeholderTextColor={colors.muted}
-              placeholder="Message... (/roll /flip /ping /time /encode /calc)"
-              selectionColor={colors.amber}
-              blurOnSubmit={false}
-              onSubmitEditing={sendMessage}
+              placeholderTextColor={colors.textTertiary}
+              placeholder="Message"
+              selectionColor={colors.primary}
             />
             {input.trim() ? (
               <TouchableOpacity style={styles.sendBtn} onPress={sendMessage}>
-                <Text style={styles.sendIcon}>▶</Text>
+                <Text style={styles.sendIcon}>↑</Text>
               </TouchableOpacity>
             ) : (
-              <>
-                <TouchableOpacity style={styles.iconBtn} onPress={sendPhoto}>
-                  <Text style={styles.iconText}>🖼</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.iconBtn} onPress={sendFile} disabled={uploading}>
-                  {uploading
-                    ? <ActivityIndicator color={colors.amber} size="small" />
-                    : <Text style={styles.iconText}>📎</Text>
-                  }
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.iconBtn} onPress={startRecording}>
-                  <Text style={styles.iconText}>🎤</Text>
-                </TouchableOpacity>
-              </>
+              <TouchableOpacity onPress={startRecording} style={styles.attachBtn}>
+                <Text style={styles.attachIcon}>🎤</Text>
+              </TouchableOpacity>
             )}
           </View>
         )}
       </View>
+
+      {/* Call screen */}
+      {showCall && callMode && (
+        <CallModal
+          chatId={chatId}
+          userEmail={user?.email || ''}
+          recipientEmail={recipientEmail}
+          mode={callMode}
+          onClose={() => { setShowCall(false); setCallMode(null); }}
+        />
+      )}
     </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
+
+  // Header
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    gap: 10,
+    paddingBottom: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.separator,
+    gap: 8,
   },
-  backBtn: { padding: 4 },
-  backText: { fontFamily: fonts.mono, fontSize: fontSize.lg, color: colors.green },
-  avatarWrap: { position: 'relative' },
-  avatar: {
-    width: 38,
-    height: 38,
-    backgroundColor: colors.amberFaint,
-    borderWidth: 1,
-    borderColor: colors.amberDim,
-    justifyContent: 'center',
-    alignItems: 'center',
+  backBtn: { paddingRight: 4 },
+  backText: { fontSize: 32, color: colors.primary, lineHeight: 36 },
+  headerCenter: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10 },
+  headerAvatar: {
+    width: 36, height: 36, borderRadius: 18,
+    backgroundColor: colors.primary,
+    justifyContent: 'center', alignItems: 'center',
+    position: 'relative',
   },
-  avatarText: { fontFamily: fonts.mono, fontSize: fontSize.lg, color: colors.amber },
-  onlineDot: {
+  headerAvatarText: { color: '#fff', fontSize: 15, fontWeight: '600' },
+  headerOnlineDot: {
     position: 'absolute', bottom: 0, right: 0,
     width: 10, height: 10, borderRadius: 5,
-    backgroundColor: colors.green,
-    borderWidth: 1, borderColor: colors.bg,
+    backgroundColor: colors.green, borderWidth: 2, borderColor: colors.bg,
   },
-  headerInfo: { flex: 1 },
-  headerName: { fontFamily: fonts.mono, fontSize: fontSize.md, color: colors.amber },
-  headerSub: { fontFamily: fonts.mono, fontSize: fontSize.xs, color: colors.green, marginTop: 1 },
+  headerName: { fontSize: fontSize.md, fontWeight: '600', color: colors.text },
+  headerSub: { fontSize: fontSize.xs, color: colors.primary },
+  callBtn: { padding: 4 },
+  callBtnIcon: { fontSize: 22 },
+
+  // Incoming call
+  incomingBanner: {
+    backgroundColor: colors.bgElevated,
+    padding: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.separator,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  incomingInfo: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  incomingIcon: { fontSize: 28 },
+  incomingTitle: { fontSize: fontSize.sm, fontWeight: '600', color: colors.text },
+  incomingFrom: { fontSize: fontSize.xs, color: colors.textSecondary },
+  incomingBtns: { flexDirection: 'row', gap: 8 },
+  declineBtn: { backgroundColor: colors.red, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20 },
+  declineBtnText: { color: '#fff', fontWeight: '600', fontSize: fontSize.sm },
+  acceptBtn: { backgroundColor: colors.green, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20 },
+  acceptBtnText: { color: '#fff', fontWeight: '600', fontSize: fontSize.sm },
+
+  // Messages
   messageList: { paddingVertical: 8 },
   emptyText: {
-    fontFamily: fonts.mono,
-    fontSize: fontSize.sm,
-    color: colors.muted,
-    textAlign: 'center',
-    marginTop: 60,
-    paddingHorizontal: 24,
+    fontSize: fontSize.md, color: colors.textSecondary,
+    textAlign: 'center', marginTop: 60, lineHeight: 24,
   },
+
+  // Input
   inputArea: {
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-    backgroundColor: colors.bgElevated,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.separator,
+    backgroundColor: colors.bg,
     paddingHorizontal: 8,
-    paddingVertical: 6,
+    paddingTop: 8,
   },
   inputRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 6 },
+  attachBtn: { width: 34, height: 34, justifyContent: 'center', alignItems: 'center' },
+  attachIcon: { fontSize: 20 },
   input: {
     flex: 1,
-    fontFamily: fonts.mono,
     fontSize: fontSize.md,
-    color: colors.amber,
-    backgroundColor: colors.bgInput,
-    borderWidth: 1,
-    borderColor: colors.border,
-    paddingHorizontal: 10,
+    color: colors.text,
+    backgroundColor: colors.bgElevated,
+    borderRadius: 20,
+    paddingHorizontal: 14,
     paddingVertical: 8,
     maxHeight: 120,
   },
   sendBtn: {
-    width: 40,
-    height: 40,
-    backgroundColor: colors.amberFaint,
-    borderWidth: 1,
-    borderColor: colors.amberDim,
-    justifyContent: 'center',
-    alignItems: 'center',
+    width: 34, height: 34, borderRadius: 17,
+    backgroundColor: colors.primary,
+    justifyContent: 'center', alignItems: 'center',
   },
-  sendIcon: { fontFamily: fonts.mono, fontSize: fontSize.md, color: colors.amber },
-  iconBtn: {
-    width: 40,
-    height: 40,
-    backgroundColor: colors.amberFaint,
-    borderWidth: 1,
-    borderColor: colors.border,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  iconText: { fontSize: fontSize.md },
-  // Incoming call
-  incomingCallBanner: {
-    backgroundColor: colors.bgElevated,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.green,
-    padding: 12,
-    gap: 8,
-  },
-  incomingCallText: {
-    fontFamily: fonts.mono,
-    fontSize: fontSize.sm,
-    color: colors.green,
-  },
-  incomingCallBtns: { flexDirection: 'row', gap: 10 },
-  acceptBtn: {
-    borderWidth: 1,
-    borderColor: colors.green,
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-  },
-  acceptBtnText: {
-    fontFamily: fonts.mono,
-    fontSize: fontSize.sm,
-    color: colors.green,
-  },
-  declineBtn: {
-    borderWidth: 1,
-    borderColor: colors.red,
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-  },
-  declineBtnText: {
-    fontFamily: fonts.mono,
-    fontSize: fontSize.sm,
-    color: colors.red,
-  },
+  sendIcon: { color: '#fff', fontSize: 18, fontWeight: '700' },
+
   // Recording
-  recordRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    paddingVertical: 4,
-  },
-  recIndicator: {
-    fontFamily: fonts.mono,
-    fontSize: fontSize.sm,
-    color: colors.red,
-    flex: 1,
-  },
-  recBtn: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderWidth: 1,
-    borderColor: colors.red,
-  },
-  recBtnText: {
-    fontFamily: fonts.mono,
-    fontSize: fontSize.sm,
-    color: colors.red,
-  },
-  recSendBtn: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    backgroundColor: colors.amber,
-  },
-  recSendText: {
-    fontFamily: fonts.mono,
-    fontSize: fontSize.sm,
-    color: colors.bg,
-    fontWeight: 'bold',
-  },
+  recordRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 4 },
+  recIndicatorWrap: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6 },
+  recDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.red },
+  recTimer: { fontSize: fontSize.md, color: colors.text },
+  recCancelBtn: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, backgroundColor: colors.bgCard },
+  recCancelText: { fontSize: fontSize.sm, color: colors.text },
+  recSendBtn: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, backgroundColor: colors.primary },
+  recSendText: { fontSize: fontSize.sm, color: '#fff', fontWeight: '600' },
 });

@@ -3,11 +3,13 @@ import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
   KeyboardAvoidingView, Platform, ActivityIndicator, ScrollView,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../contexts/AuthContext';
-import { colors, fonts, fontSize } from '../theme';
+import { colors, fontSize } from '../theme';
 
 export default function LoginScreen() {
   const { loginEmail, registerEmail } = useAuth();
+  const insets = useSafeAreaInsets();
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -36,15 +38,30 @@ export default function LoginScreen() {
 
   return (
     <KeyboardAvoidingView
-      style={styles.container}
+      style={[styles.container, { paddingTop: insets.top }]}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-        <Text style={styles.logo}>SEMAPHORE</Text>
-        <Text style={styles.tagline}>{'> secure channel established'}</Text>
+        <Text style={styles.logo}>Semaphore</Text>
+        <Text style={styles.tagline}>Secure messaging</Text>
 
-        <View style={styles.card}>
-          <Text style={styles.label}>EMAIL</Text>
+        {/* Segment */}
+        <View style={styles.segment}>
+          <TouchableOpacity
+            style={[styles.segBtn, mode === 'login' && styles.segBtnActive]}
+            onPress={() => { setMode('login'); setError(''); }}
+          >
+            <Text style={[styles.segText, mode === 'login' && styles.segTextActive]}>Sign In</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.segBtn, mode === 'register' && styles.segBtnActive]}
+            onPress={() => { setMode('register'); setError(''); }}
+          >
+            <Text style={[styles.segText, mode === 'register' && styles.segTextActive]}>Create Account</Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.form}>
           <TextInput
             style={styles.input}
             value={email}
@@ -52,128 +69,96 @@ export default function LoginScreen() {
             autoCapitalize="none"
             keyboardType="email-address"
             autoComplete="email"
-            placeholderTextColor={colors.muted}
-            placeholder="user@domain.com"
-            selectionColor={colors.amber}
+            placeholderTextColor={colors.textTertiary}
+            placeholder="Email"
+            selectionColor={colors.primary}
           />
-
-          <Text style={[styles.label, { marginTop: 16 }]}>PASSWORD</Text>
+          <View style={styles.inputDivider} />
           <TextInput
             style={styles.input}
             value={password}
             onChangeText={setPassword}
             secureTextEntry
             autoComplete={mode === 'register' ? 'new-password' : 'current-password'}
-            placeholderTextColor={colors.muted}
-            placeholder="••••••••"
-            selectionColor={colors.amber}
+            placeholderTextColor={colors.textTertiary}
+            placeholder="Password"
+            selectionColor={colors.primary}
+            onSubmitEditing={submit}
           />
-
-          {error ? <Text style={styles.error}>{`! ${error}`}</Text> : null}
-
-          <TouchableOpacity
-            style={styles.submitBtn}
-            onPress={submit}
-            disabled={loading}
-          >
-            {loading
-              ? <ActivityIndicator color={colors.bg} size="small" />
-              : <Text style={styles.submitText}>
-                  {mode === 'login' ? '[ LOGIN ]' : '[ REGISTER ]'}
-                </Text>
-            }
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.toggleBtn}
-            onPress={() => { setMode(mode === 'login' ? 'register' : 'login'); setError(''); }}
-          >
-            <Text style={styles.toggleText}>
-              {mode === 'login'
-                ? '> No account? Register'
-                : '> Have an account? Login'}
-            </Text>
-          </TouchableOpacity>
         </View>
+
+        {error ? <Text style={styles.error}>{error}</Text> : null}
+
+        <TouchableOpacity style={styles.submitBtn} onPress={submit} disabled={loading}>
+          {loading
+            ? <ActivityIndicator color="#fff" size="small" />
+            : <Text style={styles.submitText}>{mode === 'login' ? 'Sign In' : 'Create Account'}</Text>
+          }
+        </TouchableOpacity>
       </ScrollView>
     </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.bg,
-  },
-  scroll: {
-    flexGrow: 1,
-    justifyContent: 'center',
-    padding: 24,
-  },
+  container: { flex: 1, backgroundColor: colors.bg },
+  scroll: { flexGrow: 1, justifyContent: 'center', padding: 24 },
   logo: {
-    fontFamily: fonts.mono,
-    fontSize: 28,
-    color: colors.amber,
-    letterSpacing: 8,
+    fontSize: 34,
+    fontWeight: '700',
+    color: colors.text,
     textAlign: 'center',
-    marginBottom: 8,
+    marginBottom: 6,
   },
   tagline: {
-    fontFamily: fonts.mono,
-    fontSize: fontSize.sm,
-    color: colors.green,
+    fontSize: fontSize.md,
+    color: colors.textSecondary,
     textAlign: 'center',
     marginBottom: 40,
   },
-  card: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 24,
-    backgroundColor: colors.bgElevated,
+  segment: {
+    flexDirection: 'row',
+    backgroundColor: colors.bgCard,
+    borderRadius: 10,
+    padding: 2,
+    marginBottom: 24,
   },
-  label: {
-    fontFamily: fonts.mono,
-    fontSize: fontSize.xs,
-    color: colors.amberDim,
-    letterSpacing: 2,
-    marginBottom: 6,
+  segBtn: {
+    flex: 1,
+    paddingVertical: 8,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  segBtnActive: { backgroundColor: colors.bgElevated },
+  segText: { fontSize: fontSize.sm, color: colors.textSecondary },
+  segTextActive: { color: colors.text, fontWeight: '600' },
+  form: {
+    backgroundColor: colors.bgElevated,
+    borderRadius: 12,
+    overflow: 'hidden',
+    marginBottom: 16,
   },
   input: {
-    fontFamily: fonts.mono,
     fontSize: fontSize.md,
-    color: colors.amber,
-    backgroundColor: colors.bgInput,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 12,
-    borderRadius: 0,
+    color: colors.text,
+    padding: 16,
   },
+  inputDivider: { height: StyleSheet.hairlineWidth, backgroundColor: colors.separator, marginLeft: 16 },
   error: {
-    fontFamily: fonts.mono,
     fontSize: fontSize.sm,
     color: colors.red,
-    marginTop: 12,
+    marginBottom: 16,
+    paddingHorizontal: 4,
   },
   submitBtn: {
-    backgroundColor: colors.amber,
-    padding: 14,
+    backgroundColor: colors.primary,
+    borderRadius: 12,
+    padding: 16,
     alignItems: 'center',
-    marginTop: 24,
   },
   submitText: {
-    fontFamily: fonts.mono,
     fontSize: fontSize.md,
-    color: colors.bg,
-    fontWeight: 'bold',
-    letterSpacing: 2,
-  },
-  toggleBtn: {
-    marginTop: 16,
-    alignItems: 'center',
-  },
-  toggleText: {
-    fontFamily: fonts.mono,
-    fontSize: fontSize.sm,
-    color: colors.muted,
+    color: '#fff',
+    fontWeight: '600',
   },
 });
