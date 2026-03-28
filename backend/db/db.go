@@ -49,7 +49,7 @@ func (s *Store) CreateUser(ctx context.Context, email, passwordHash, googleID, d
 			password_hash = COALESCE(EXCLUDED.password_hash, users.password_hash),
 			google_id     = COALESCE(EXCLUDED.google_id,     users.google_id),
 			photo_url     = COALESCE(EXCLUDED.photo_url,     users.photo_url)
-		RETURNING id, email, display_name, photo_url, is_online, last_seen, created_at`,
+		RETURNING id, email, display_name, photo_url, is_online, COALESCE(last_seen, created_at), created_at`,
 		email, nullStr(passwordHash), gid, dn, pu,
 	).Scan(&u.ID, &u.Email, &u.DisplayName, &u.PhotoURL, &u.IsOnline, &u.LastSeen, &u.CreatedAt)
 	if err != nil {
@@ -60,13 +60,13 @@ func (s *Store) CreateUser(ctx context.Context, email, passwordHash, googleID, d
 
 func (s *Store) GetUserByEmail(ctx context.Context, email string) (*models.User, error) {
 	return s.scanUser(s.pool.QueryRow(ctx, `
-		SELECT id, email, display_name, photo_url, is_online, last_seen, created_at
+		SELECT id, email, display_name, photo_url, is_online, COALESCE(last_seen, created_at), created_at
 		FROM users WHERE email = $1`, email))
 }
 
 func (s *Store) GetUserByID(ctx context.Context, id string) (*models.User, error) {
 	return s.scanUser(s.pool.QueryRow(ctx, `
-		SELECT id, email, display_name, photo_url, is_online, last_seen, created_at
+		SELECT id, email, display_name, photo_url, is_online, COALESCE(last_seen, created_at), created_at
 		FROM users WHERE id = $1`, id))
 }
 
@@ -80,7 +80,7 @@ func (s *Store) GetPasswordHash(ctx context.Context, email string) (string, stri
 
 func (s *Store) GetGoogleUser(ctx context.Context, googleID string) (*models.User, error) {
 	return s.scanUser(s.pool.QueryRow(ctx, `
-		SELECT id, email, display_name, photo_url, is_online, last_seen, created_at
+		SELECT id, email, display_name, photo_url, is_online, COALESCE(last_seen, created_at), created_at
 		FROM users WHERE google_id = $1`, googleID))
 }
 
