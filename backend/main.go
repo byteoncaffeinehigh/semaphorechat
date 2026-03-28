@@ -87,6 +87,7 @@ func main() {
 	api.PUT("/calls/:chatId", callsH.Update)
 	api.GET("/calls/:chatId", callsH.Get)
 	api.POST("/calls/:chatId/candidates", callsH.AddCandidate)
+	api.GET("/calls/:chatId/candidates", callsH.GetCandidates)
 
 	pushH := handlers.NewPushHandler(store, cfg)
 	api.POST("/push/subscribe", pushH.Subscribe)
@@ -95,6 +96,15 @@ func main() {
 
 	// health
 	r.GET("/health", func(c *gin.Context) { c.JSON(http.StatusOK, gin.H{"ok": true}) })
+
+	// SPA fallback — serve index.html for any non-API route
+	r.NoRoute(func(c *gin.Context) {
+		if len(c.Request.URL.Path) >= 4 && c.Request.URL.Path[:4] == "/api" {
+			c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
+			return
+		}
+		c.File("../frontend/index.html")
+	})
 
 	log.Printf("listening on :%s (frontend: %s)", cfg.Port, cfg.FrontendURL)
 	log.Fatal(http.ListenAndServe(":"+cfg.Port, r))

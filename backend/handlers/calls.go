@@ -169,3 +169,25 @@ func (h *CallHandler) AddCandidate(c *gin.Context) {
 
 	c.JSON(http.StatusCreated, cc)
 }
+
+// GET /api/calls/:chatId/candidates?side=offer|answer
+func (h *CallHandler) GetCandidates(c *gin.Context) {
+	chatID := c.Param("chatId")
+	ok, err := h.store.IsChatMember(c, chatID, middleware.UserIDFrom(c))
+	if err != nil || !ok {
+		c.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
+		return
+	}
+	call, err := h.store.GetCall(c, chatID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "no active call"})
+		return
+	}
+	side := c.Query("side")
+	ccs, err := h.store.GetCallCandidates(c, call.ID, side)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "server error"})
+		return
+	}
+	c.JSON(http.StatusOK, ccs)
+}

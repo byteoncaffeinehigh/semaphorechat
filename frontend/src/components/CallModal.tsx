@@ -109,11 +109,18 @@ export default function CallModal({ chatId, user, recipientEmail, mode, onClose 
       try {
         await pcRef.current.setRemoteDescription(new RTCSessionDescription(call.answer));
         setStatus("active");
-        // flush buffered candidates
+        // flush WS-buffered candidates
         for (const c of pendingCandidatesRef.current) {
           await pcRef.current.addIceCandidate(new RTCIceCandidate(c)).catch(() => {});
         }
         pendingCandidatesRef.current = [];
+        // also fetch any answer-side candidates stored before we processed the answer
+        const stored = await apiGet<{ candidate: RTCIceCandidateInit }[]>(
+          `/api/calls/${chatId}/candidates?side=answer`
+        ).catch(() => [] as { candidate: RTCIceCandidateInit }[]);
+        for (const { candidate } of stored) {
+          await pcRef.current?.addIceCandidate(new RTCIceCandidate(candidate)).catch(() => {});
+        }
       } catch {}
     }
   }, [chatId, cleanup, onClose]);
@@ -179,6 +186,15 @@ export default function CallModal({ chatId, user, recipientEmail, mode, onClose 
           };
 
           await pc.setRemoteDescription(new RTCSessionDescription(callData.offer));
+
+          // fetch any ICE candidates the caller already sent before we joined
+          const stored = await apiGet<{ candidate: RTCIceCandidateInit }[]>(
+            `/api/calls/${chatId}/candidates?side=offer`
+          ).catch(() => [] as { candidate: RTCIceCandidateInit }[]);
+          for (const { candidate } of stored) {
+            await pc.addIceCandidate(new RTCIceCandidate(candidate)).catch(() => {});
+          }
+
           const answer = await pc.createAnswer();
           await pc.setLocalDescription(answer);
 
