@@ -49,6 +49,7 @@ export default function CallModal({ chatId, user, recipientEmail, mode, onClose 
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
+  const pendingCandidatesRef = useRef<RTCIceCandidateInit[]>([]);
 
   const [status, setStatus] = useState(mode === "caller" ? "calling" : "connecting");
   const [isMuted, setIsMuted] = useState(false);
@@ -108,6 +109,11 @@ export default function CallModal({ chatId, user, recipientEmail, mode, onClose 
       try {
         await pcRef.current.setRemoteDescription(new RTCSessionDescription(call.answer));
         setStatus("active");
+        // flush buffered candidates
+        for (const c of pendingCandidatesRef.current) {
+          await pcRef.current.addIceCandidate(new RTCIceCandidate(c)).catch(() => {});
+        }
+        pendingCandidatesRef.current = [];
       } catch {}
     }
   }, [chatId, cleanup, onClose]);
@@ -117,8 +123,10 @@ export default function CallModal({ chatId, user, recipientEmail, mode, onClose 
     if (cid !== chatId) return;
     const expectedSide = mode === "caller" ? "answer" : "offer";
     if (side !== expectedSide) return;
-    if (pcRef.current) {
+    if (pcRef.current?.currentRemoteDescription) {
       try { await pcRef.current.addIceCandidate(new RTCIceCandidate(candidate)); } catch {}
+    } else {
+      pendingCandidatesRef.current.push(candidate);
     }
   }, [chatId, mode]);
 

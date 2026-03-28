@@ -31,7 +31,8 @@
         {
           "microphonePermission": "Semaphore needs access to your microphone to record voice messages."
         }
-      ]
+      ],
+      "expo-document-picker"
     ],
     "newArchEnabled": false,
     "extra": {

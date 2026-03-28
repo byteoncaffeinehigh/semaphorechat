@@ -235,6 +235,19 @@ function ChatScreen({ chat }: { chat: Chat }) {
     if (lr) setRecipientLastRead(new Date(lr).getTime());
   }, [chatId, recipientEmail]);
 
+  useWSListener("call_update", (data) => {
+    const d = data as { chatId: string; call: { status?: string } };
+    if (d.chatId !== chatId) return;
+    if (d.call.status === "calling" && !showCall) {
+      setCallMode("callee");
+      setShowCall(true);
+    }
+    if ((d.call.status === "ended" || d.call.status === "declined") && showCall) {
+      setShowCall(false);
+      setCallMode(null);
+    }
+  }, [chatId, showCall]);
+
   useEffect(() => {
     const count = messages.length;
     if (isInitialLoadRef.current) {
